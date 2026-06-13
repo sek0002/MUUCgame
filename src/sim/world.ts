@@ -47,6 +47,7 @@ export interface Decoration {
 export type CreatureKey =
   | "blue-devil"
   | "crayfish"
+  | "killer-whale"
   | "nudhhi"
   | "seadragon"
   | "smooth-sting-ray";
@@ -304,7 +305,7 @@ export function generateWorld(seed = DEFAULT_CAVE_SEED): WorldModel {
     zones: ZONES,
     rocks,
     decorations: [],
-    creatures: [],
+    creatures: generateCreatures(solid, mulberry32((seed ^ 0xC2EA71) >>> 0)),
     openTiles,
     caveTiles,
   };
@@ -401,14 +402,14 @@ function carveSeededCaveSystems(
     {
       zone: ZONES[2],
       entranceCount: 3,
-      bulkTrackCount: 22,
-      walkerCount: 38,
+      bulkTrackCount: 12,
+      walkerCount: 16,
       corridorRadius: 1.25,
-      largeCavernCount: 3,
-      sideBranchChance: 0.18,
-      branchCadence: 17,
-      sideBranchMinLength: 42,
-      sideBranchMaxLength: 126,
+      largeCavernCount: 2,
+      sideBranchChance: 0.06,
+      branchCadence: 38,
+      sideBranchMinLength: 24,
+      sideBranchMaxLength: 68,
       mergeFamily: "roaming",
       carveStartX: BEACH_END_X,
       carveEndX: WORLD_WIDTH,
@@ -2348,7 +2349,7 @@ function addDropoffCliffOverhangs(
   const deepStartTx = Math.floor(deep.startX / TILE);
   const deepWidthTiles = Math.floor((deep.endX - deep.startX) / TILE);
   const dropWidthTiles = Math.floor(deepWidthTiles * 0.24);
-  const anchors = [0.16, 0.35, 0.54, 0.76];
+  const anchors = [0.12, 0.26, 0.39, 0.54, 0.68, 0.82];
   const middleLedgeIndex = Math.floor(anchors.length / 2);
 
   for (let i = 0; i < anchors.length; i += 1) {
@@ -2363,11 +2364,12 @@ function addDropoffCliffOverhangs(
     const rootLift = Math.round(clamp(randomNormal(random, isBottomLedge ? 10 : 7.5, 1.8), 4, 15));
     const topTy = clamp(floorTy - rootLift, WATERLINE_TILE + 6, GRID_H - 20);
     const length = Math.round(
-      clamp(randomNormal(random, isBottomLedge ? 31 : 24, isBottomLedge ? 8 : 6), 12, 40),
+      clamp(randomNormal(random, isBottomLedge ? 38 : 29, isBottomLedge ? 9 : 8), 14, 52),
     );
-    const thickness = Math.round(clamp(randomNormal(random, isBottomLedge ? 6.2 : 5.2, 1.4), 4, 8));
-    const sag = Math.round(clamp(randomNormal(random, 6.2, 2), 3, 10));
+    const thickness = Math.round(clamp(randomNormal(random, isBottomLedge ? 6.8 : 5.7, 1.5), 4, 9));
+    const sag = Math.round(clamp(randomNormal(random, 7.2, 2.6), 3, 13));
     const rootWidth = 2 + Math.floor(random() * 4);
+    const direction: -1 | 1 = i % 3 === 1 ? -1 : 1;
 
     addCliffFaceOverhang(
       solid,
@@ -2380,6 +2382,9 @@ function addDropoffCliffOverhangs(
       sag,
       rootWidth,
       i,
+      direction,
+      i % 2 === 0,
+      Math.max(4, Math.round(thickness * 1.2)),
     );
 
     if (i === middleLedgeIndex) {
@@ -2403,15 +2408,16 @@ function addDropoffCliffOverhangs(
       );
     }
 
-    const createCounterOverhang = random() > 0.4 || isBottomLedge;
+    const createCounterOverhang = random() > 0.28 || isBottomLedge;
     if (createCounterOverhang) {
-      const overhangLength = Math.max(8, Math.round(length * 0.58));
+      const overhangLength = Math.max(10, Math.round(length * (0.5 + random() * 0.28)));
       const overhangThickness = Math.max(3, thickness - 1);
-      const overhangSag = Math.max(1, Math.round(sag * 0.55));
+      const overhangSag = Math.max(1, Math.round(sag * (0.42 + random() * 0.35)));
+      const counterDirection: -1 | 1 = direction === 1 ? -1 : 1;
       addCliffFaceOverhang(
         solid,
         protectedSolid,
-        tx + Math.round(length * 0.4),
+        tx + direction * Math.round(length * 0.42),
         topTy + thickness + 3 + Math.floor(random() * 3),
         floorTy + 4,
         overhangLength,
@@ -2419,6 +2425,9 @@ function addDropoffCliffOverhangs(
         overhangSag,
         2,
         i + 11,
+        counterDirection,
+        random() > 0.45,
+        Math.max(3, Math.round(overhangThickness * 1.05)),
       );
     }
 
@@ -2877,20 +2886,26 @@ function generateDecorations(solid: boolean[][], random: () => number) {
 
 function generateCreatures(solid: boolean[][], random: () => number) {
   const creatures: CreatureSpawn[] = [];
-  addHabitatCreatures(creatures, solid, random, "smooth-sting-ray", 3, beachAreaBounds(), (tx, ty) => {
-    return isOpenWaterTile(solid, tx, ty) && ty < seafloorTileFor(tx) - 4;
+  const usedCreatureTiles = new Set<string>();
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "blue-devil", randomCount(random, 2, 5), bommieAndLedgeBounds(), (tx, ty) => {
+    return hasCreatureClearance(solid, tx, ty, 1, 1) && (isUnderLedgeTile(solid, tx, ty) || isBommieTopTile(solid, tx, ty));
   });
-  addHabitatCreatures(creatures, solid, random, "seadragon", 3, coralGardenBounds(), (tx, ty) => {
-    return isOpenWaterTile(solid, tx, ty) && ty < seafloorTileFor(tx) - 3;
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "crayfish", randomCount(random, 2, 4), fullOceanBounds(), (tx, ty) => {
+    return isCaveTile(solid, tx, ty) && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
-  addHabitatCreatures(creatures, solid, random, "nudhhi", 3, coralGardenBounds(), (tx, ty) => {
-    return isFloorTile(solid, tx, ty);
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "killer-whale", randomCount(random, 1, 2), openOceanWaterBounds(), (tx, ty) => {
+    return isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 4, 2) && ty < seafloorTileFor(tx) - 8;
   });
-  addHabitatCreatures(creatures, solid, random, "crayfish", 3, fullOceanBounds(), (tx, ty) => {
-    return !solid[ty][tx] && isCaveTile(solid, tx, ty);
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "nudhhi", randomCount(random, 2, 4), coralGardenBounds(), (tx, ty) => {
+    return zoneAtX(tx * TILE).id === "coral" && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
-  addHabitatCreatures(creatures, solid, random, "blue-devil", 3, bommieAndLedgeBounds(), (tx, ty) => {
-    return !solid[ty][tx] && (isUnderLedgeTile(solid, tx, ty) || isBommieTopTile(solid, tx, ty));
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "seadragon", randomCount(random, 2, 5), coralGardenBounds(), (tx, ty) => {
+    const floor = seafloorTileFor(tx);
+    return zoneAtX(tx * TILE).id === "coral" && isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 2, 1) && ty >= floor - 7 && ty <= floor - 2;
+  });
+  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "smooth-sting-ray", randomCount(random, 2, 5), coralAndOpenOceanBounds(), (tx, ty) => {
+    const zoneId = zoneAtX(tx * TILE).id;
+    return (zoneId === "coral" || zoneId === "surface") && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
   return creatures;
 }
@@ -2899,6 +2914,7 @@ function addHabitatCreatures(
   creatures: CreatureSpawn[],
   solid: boolean[][],
   random: () => number,
+  usedCreatureTiles: Set<string>,
   assetKey: CreatureKey,
   count: number,
   bounds: { startTx: number; endTx: number; minTy: number; maxTy: number },
@@ -2907,12 +2923,25 @@ function addHabitatCreatures(
   const used = new Set<string>();
   for (let i = 0; i < count; i += 1) {
     const spawn = findSpawnTile(solid, random, bounds, (tx, ty) => {
-      return !used.has(tileKey(tx, ty)) && predicate(tx, ty);
+      return !used.has(tileKey(tx, ty)) && isAwayFromCreatures(usedCreatureTiles, tx, ty) && predicate(tx, ty);
     });
     if (!spawn) continue;
     used.add(tileKey(spawn.tx, spawn.ty));
+    usedCreatureTiles.add(tileKey(spawn.tx, spawn.ty));
     creatures.push(makeCreatureSpawn(spawn.tx, spawn.ty, zoneAtX(spawn.tx * TILE), assetKey, random));
   }
+}
+
+function randomCount(random: () => number, min: number, max: number) {
+  return min + Math.floor(random() * (max - min + 1));
+}
+
+function isAwayFromCreatures(usedCreatureTiles: Set<string>, tx: number, ty: number) {
+  for (const key of usedCreatureTiles) {
+    const [otherTx, otherTy] = key.split(",").map(Number);
+    if (Math.hypot(otherTx - tx, otherTy - ty) < 18) return false;
+  }
+  return true;
 }
 
 function beachAreaBounds() {
@@ -2921,6 +2950,33 @@ function beachAreaBounds() {
     endTx: Math.floor((BEACH_END_X + 1360) / TILE),
     minTy: WATERLINE_TILE + 2,
     maxTy: Math.floor(GRID_H * 0.52),
+  };
+}
+
+function openOceanWaterBounds() {
+  return {
+    startTx: Math.floor((ZONES[1].startX + 420) / TILE),
+    endTx: Math.floor((ZONES[1].endX - 420) / TILE),
+    minTy: WATERLINE_TILE + 5,
+    maxTy: Math.floor(depthToY(82) / TILE),
+  };
+}
+
+function coralAndOpenOceanBounds() {
+  return {
+    startTx: Math.floor((ZONES[0].startX + 240) / TILE),
+    endTx: Math.floor((ZONES[1].endX - 240) / TILE),
+    minTy: WATERLINE_TILE + 4,
+    maxTy: Math.floor(depthToY(118) / TILE),
+  };
+}
+
+function dropoffWaterBounds() {
+  return {
+    startTx: Math.floor((ZONES[2].startX + 360) / TILE),
+    endTx: GRID_W - 12,
+    minTy: Math.floor(depthToY(120) / TILE),
+    maxTy: Math.floor(depthToY(430) / TILE),
   };
 }
 
@@ -2983,18 +3039,29 @@ function makeCreatureSpawn(
   zone: OceanZone,
   assetKey: CreatureKey,
   random: () => number,
+  scaleOverride?: number,
 ): CreatureSpawn {
   return {
     x: tx * TILE + 16,
     y: ty * TILE + 16,
     assetKey,
     drift: 12 + random() * 34,
-    scale:
-      assetKey === "crayfish" || assetKey === "nudhhi"
-        ? 0.36 + random() * 0.32
-        : 0.42 + random() * 0.5,
+    scale: scaleOverride ?? creatureScale(assetKey, random),
     zoneId: zone.id,
   };
+}
+
+function creatureScale(assetKey: CreatureKey, random: () => number) {
+  const means: Record<CreatureKey, number> = {
+    "blue-devil": 0.48,
+    crayfish: 0.62,
+    "killer-whale": 1.08,
+    nudhhi: 0.34,
+    seadragon: 0.44,
+    "smooth-sting-ray": 0.68,
+  };
+  const spread = assetKey === "killer-whale" ? 0.08 : 0.16;
+  return Math.max(0.18, means[assetKey] * (1 + randomNormal(random, 0, spread)));
 }
 
 function isCaveTile(solid: boolean[][], tx: number, ty: number) {
@@ -3007,6 +3074,28 @@ function isOpenWaterTile(solid: boolean[][], tx: number, ty: number) {
 
 function isFloorTile(solid: boolean[][], tx: number, ty: number) {
   return Boolean(!solid[ty][tx] && solid[ty + 1]?.[tx]);
+}
+
+function isSupportedFloorTile(solid: boolean[][], tx: number, ty: number) {
+  return isFloorTile(solid, tx, ty) && !solid[ty - 1]?.[tx] && !solid[ty]?.[tx - 1] && !solid[ty]?.[tx + 1];
+}
+
+function hasFloorCreatureClearance(solid: boolean[][], tx: number, ty: number) {
+  for (let y = ty - 2; y <= ty; y += 1) {
+    for (let x = tx - 1; x <= tx + 1; x += 1) {
+      if (solid[y]?.[x]) return false;
+    }
+  }
+  return Boolean(solid[ty + 1]?.[tx]);
+}
+
+function hasCreatureClearance(solid: boolean[][], tx: number, ty: number, radiusX: number, radiusY: number) {
+  for (let y = ty - radiusY; y <= ty + radiusY; y += 1) {
+    for (let x = tx - radiusX; x <= tx + radiusX; x += 1) {
+      if (solid[y]?.[x]) return false;
+    }
+  }
+  return true;
 }
 
 function isUnderLedgeTile(solid: boolean[][], tx: number, ty: number) {

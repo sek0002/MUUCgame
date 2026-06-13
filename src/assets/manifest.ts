@@ -29,11 +29,16 @@ export const CREATURES = {
     key: "smooth-sting-ray",
     url: assetUrl("/assets/creatures/smooth sting ray.svg"),
   },
+  killerWhale: {
+    key: "killer-whale",
+    url: assetUrl("/assets/creatures/killer whale.png"),
+  },
 } as const;
 
 export const NPC_CREATURES = [
   CREATURES.blueDevil,
   CREATURES.crayfish,
+  CREATURES.killerWhale,
   CREATURES.nudhhi,
   CREATURES.seadragon,
   CREATURES.stingray,
