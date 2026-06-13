@@ -6,13 +6,12 @@ export const BEACH_END_X = 900;
 export const WORLD_WIDTH = 50000;
 const OCEAN_WIDTH = WORLD_WIDTH - BEACH_END_X;
 const CORAL_WIDTH = Math.round(OCEAN_WIDTH * 0.2);
-const OPEN_WIDTH = Math.round(OCEAN_WIDTH * 0.3);
+const OPEN_WIDTH = Math.round(OCEAN_WIDTH * 0.35);
 const CORAL_END_X = BEACH_END_X + CORAL_WIDTH;
 const OPEN_END_X = CORAL_END_X + OPEN_WIDTH;
 export const DEPTH_PIXELS_PER_METER = 30;
 export const SEAFLOOR_MAX_DEPTH_METERS = 500;
-export const CAVE_VERTICAL_EXTENT_METERS = 50;
-export const WORLD_MAX_DEPTH_METERS = SEAFLOOR_MAX_DEPTH_METERS + CAVE_VERTICAL_EXTENT_METERS;
+export const WORLD_MAX_DEPTH_METERS = 720;
 export const WORLD_HEIGHT =
   Math.ceil((WATERLINE_Y + WORLD_MAX_DEPTH_METERS * DEPTH_PIXELS_PER_METER + TILE * 8) / TILE) * TILE;
 
@@ -67,7 +66,10 @@ export interface WorldModel {
   decorations: Decoration[];
   creatures: CreatureSpawn[];
   openTiles: Set<string>;
+  caveTiles: Set<string>;
 }
+
+export const DEFAULT_CAVE_SEED = 130626;
 
 export const ZONES: OceanZone[] = [
   {
@@ -122,6 +124,7 @@ const GRID_H = Math.floor(WORLD_HEIGHT / TILE);
 const WATERLINE_TILE = Math.ceil(WATERLINE_Y / TILE);
 const seafloorTileCache: number[] = [];
 const caveBottomTileCache: number[] = [];
+const fullCaveBottomTileCache: number[] = [];
 const TERRAIN_RELIEF_SEED = 0x5eaf11;
 const BOMMIE_TERRAIN_SEED = 0xb0441e;
 const CLIFF_OVERHANG_SEED = 0xc11ff;
@@ -163,28 +166,29 @@ function baselineDepthAtX(x: number): number {
   }
   if (x < deepStart) {
     const t = clamp((x - openStart) / (deepStart - openStart), 0, 1);
-    return lerp(35, 100, smooth01(t));
+    const openDepthT = clamp(t / 0.45, 0, 1);
+    return lerp(35, 100, smooth01(openDepthT));
   }
 
   const zone = ZONES[2];
   const local = clamp((x - zone.startX) / (zone.endX - zone.startX), 0, 1);
-  const dropT = clamp(local / 0.2, 0, 1);
-  const deepDropBottom = lerp(100, 392, smooth01(dropT));
+  const dropT = clamp(local / 0.18, 0, 1);
+  const deepDropBottom = lerp(100, 455, smooth01(dropT));
 
-  if (local <= 0.20) {
+  if (local <= 0.18) {
     return deepDropBottom;
   }
-  if (local <= 0.35) {
-    const settleT = smooth01(clamp((local - 0.20) / 0.15, 0, 1));
-    return lerp(392, 404, settleT);
+  if (local <= 0.24) {
+    const settleT = smooth01(clamp((local - 0.18) / 0.035, 0, 1));
+    return lerp(455, 465, settleT);
   }
-  if (local <= 0.56) {
-    return 404;
+  if (local <= 0.285) {
+    return 465;
   }
 
-  const mountainT = smooth01(clamp((local - 0.56) / 0.44, 0, 1));
-  const trenchBase = lerp(404, 462, mountainT);
-  const deepSag = smooth01(clamp((local - 0.56) / 0.44, 0, 1)) * 22;
+  const mountainT = smooth01(clamp((local - 0.285) / 0.715, 0, 1));
+  const trenchBase = lerp(465, 472, mountainT);
+  const deepSag = mountainT * 22;
   return trenchBase + deepSag;
 }
 
@@ -229,7 +233,8 @@ function fixedTerrainReliefAtX(x: number) {
 
   const deepWidth = WORLD_WIDTH - deepStart;
   const local = clamp((x - deepStart) / deepWidth, 0, 1);
-  const mountainFade = smooth01(clamp((local - 0.11) / 0.21, 0, 1));
+  const plateauFade = smooth01(clamp((local - 0.24) / 0.045, 0, 1));
+  const mountainFade = smooth01(clamp((local - 0.285) / 0.17, 0, 1));
   const trenchNoise =
     layeredNoise1D(x * 0.00022, 5, TERRAIN_RELIEF_SEED + 223) * 18 +
     layeredNoise1D(x * 0.0011, 4, TERRAIN_RELIEF_SEED + 487) * 8;
@@ -239,8 +244,8 @@ function fixedTerrainReliefAtX(x: number) {
     gaussianTerrainFeature(x, deepStart + deepWidth * 0.58, 1700, -112) +
     gaussianTerrainFeature(x, deepStart + deepWidth * 0.73, 1300, 32) +
     gaussianTerrainFeature(x, deepStart + deepWidth * 0.84, 1900, -86) +
-    gaussianTerrainFeature(x, deepStart + deepWidth * 0.94, 900, 16);
-  return mountainFade * (trenchNoise + mountains) + ripple * 1.5;
+    gaussianTerrainFeature(x, deepStart + deepWidth * 0.94, 900, 20);
+  return mountainFade * (trenchNoise + mountains) + ripple * (0.28 + plateauFade * 1.22);
 }
 
 function gaussianTerrainFeature(x: number, center: number, radius: number, depthOffset: number) {
@@ -259,8 +264,8 @@ export function depthAtPosition(x: number, y: number): number {
   return Math.round(clamp(yToDepth(y), 0, WORLD_MAX_DEPTH_METERS));
 }
 
-export function generateWorld(seed = 2871): WorldModel {
-  const random = mulberry32(seed);
+export function generateWorld(seed = DEFAULT_CAVE_SEED): WorldModel {
+  const terrainRandom = mulberry32(BOMMIE_TERRAIN_SEED);
   const solid = Array.from({ length: GRID_H }, () =>
     Array.from({ length: GRID_W }, () => false),
   );
@@ -269,10 +274,13 @@ export function generateWorld(seed = 2871): WorldModel {
   );
 
   carveBaselineFloor(solid);
-  addConnectedBommies(solid, mulberry32(BOMMIE_TERRAIN_SEED), protectedSolid);
+  addConnectedBommies(solid, terrainRandom, protectedSolid);
+  addShallowCoralCutoutLedges(solid, terrainRandom, protectedSolid);
   addDropoffCliffOverhangs(solid, mulberry32(CLIFF_OVERHANG_SEED), protectedSolid);
+  carveSeededCaveSystems(solid, protectedSolid, seed >>> 0);
 
   const openTiles = new Set<string>();
+  const caveTiles = new Set<string>();
   const rocks: RockTile[] = [];
   for (let ty = 0; ty < GRID_H; ty += 1) {
     for (let tx = 0; tx < GRID_W; tx += 1) {
@@ -282,9 +290,12 @@ export function generateWorld(seed = 2871): WorldModel {
             x: tx * TILE,
             y: ty * TILE,
             zoneId: zoneAtX(tx * TILE).id,
-            variant: Math.floor(random() * 4),
+            variant: Math.floor(terrainRandom() * 4),
           });
         }
+      } else if (ty * TILE > WATERLINE_Y) {
+        openTiles.add(tileKey(tx, ty));
+        if (isCavePathTile(tx, ty)) caveTiles.add(tileKey(tx, ty));
       }
     }
   }
@@ -295,6 +306,7 @@ export function generateWorld(seed = 2871): WorldModel {
     decorations: [],
     creatures: [],
     openTiles,
+    caveTiles,
   };
 }
 
@@ -317,6 +329,1151 @@ function isExposedSolid(solid: boolean[][], tx: number, ty: number) {
     }
   }
   return false;
+}
+
+type CaveAnchor = { tx: number; ty: number };
+type CaveFootprint = CaveAnchor & { radius: number };
+type CaveClaimFamily = "coral" | "roaming";
+type CaveClaim = { trackId: number; family: CaveClaimFamily };
+type CaveClaimMap = Map<string, CaveClaim>;
+type CaveTrackCounter = {
+  value: number;
+  families: Map<number, CaveClaimFamily>;
+  termini: Map<CaveClaimFamily, CaveAnchor[]>;
+  cavernFootprints: CaveFootprint[];
+  branchStarts: CaveAnchor[];
+};
+type CaveSystemSpec = {
+  zone: OceanZone;
+  entranceCount: number;
+  bulkTrackCount: number;
+  walkerCount: number;
+  corridorRadius: number;
+  largeCavernCount: number;
+  sideBranchChance: number;
+  branchCadence: number;
+  sideBranchMinLength: number;
+  sideBranchMaxLength: number;
+  mergeFamily: CaveClaimFamily;
+  carveStartX?: number;
+  carveEndX?: number;
+  seedSalt: number;
+};
+
+function carveSeededCaveSystems(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  seed: number,
+) {
+  const specs: CaveSystemSpec[] = [
+    {
+      zone: ZONES[0],
+      entranceCount: 2,
+      bulkTrackCount: 11,
+      walkerCount: 18,
+      corridorRadius: 1.2,
+      largeCavernCount: 1,
+      sideBranchChance: 0.18,
+      branchCadence: 20,
+      sideBranchMinLength: 22,
+      sideBranchMaxLength: 52,
+      mergeFamily: "coral",
+      carveStartX: BEACH_END_X,
+      carveEndX: WORLD_WIDTH,
+      seedSalt: 0xC0A1,
+    },
+    {
+      zone: ZONES[1],
+      entranceCount: 2,
+      bulkTrackCount: 13,
+      walkerCount: 16,
+      corridorRadius: 1.2,
+      largeCavernCount: 1,
+      sideBranchChance: 0.16,
+      branchCadence: 20,
+      sideBranchMinLength: 28,
+      sideBranchMaxLength: 68,
+      mergeFamily: "roaming",
+      carveStartX: BEACH_END_X,
+      carveEndX: WORLD_WIDTH,
+      seedSalt: 0x0CEA,
+    },
+    {
+      zone: ZONES[2],
+      entranceCount: 3,
+      bulkTrackCount: 22,
+      walkerCount: 38,
+      corridorRadius: 1.25,
+      largeCavernCount: 3,
+      sideBranchChance: 0.18,
+      branchCadence: 17,
+      sideBranchMinLength: 42,
+      sideBranchMaxLength: 126,
+      mergeFamily: "roaming",
+      carveStartX: BEACH_END_X,
+      carveEndX: WORLD_WIDTH,
+      seedSalt: 0xD00F,
+    },
+  ];
+
+  const systems: Array<{ spec: CaveSystemSpec; anchors: CaveAnchor[]; targets: CaveAnchor[] }> = [];
+  const caveClaims: CaveClaimMap = new Map();
+  const trackCounter: CaveTrackCounter = {
+    value: 1,
+    families: new Map(),
+    termini: new Map(),
+    cavernFootprints: [],
+    branchStarts: [],
+  };
+  const entranceAnchors: CaveAnchor[] = [];
+  for (const spec of specs) {
+    const localRandom = mulberry32((seed ^ spec.seedSalt) >>> 0);
+    const entrances = seededCaveEntrances(spec.zone, spec.entranceCount, localRandom);
+    const anchors = carveCaveEntrancesForSpec(solid, protectedSolid, spec, entrances, caveClaims, trackCounter);
+    entranceAnchors.push(...anchors);
+    const targets = carveRandomWalkerMaze(solid, protectedSolid, spec, anchors, localRandom, caveClaims, trackCounter);
+    carveLargeCavernBudget(solid, protectedSolid, spec, targets, localRandom, caveClaims, trackCounter);
+    validateSeededCaveNetwork(solid, protectedSolid, spec, [...anchors, ...targets], localRandom, caveClaims, trackCounter);
+    systems.push({ spec, anchors, targets });
+  }
+
+  linkCaveSystems(solid, protectedSolid, systems, caveClaims, trackCounter, mulberry32((seed ^ 0x51A7E) >>> 0));
+  smoothCaveEdges(solid);
+  removeDisconnectedCaveFragments(solid, entranceAnchors);
+  smoothCaveEdges(solid);
+}
+
+function seededCaveEntrances(zone: OceanZone, count: number, random: () => number) {
+  const startTx = zone.id === "deep"
+    ? firstDropoffCaveEntranceTx()
+    : Math.floor(zone.startX / TILE);
+  const endTx = Math.floor(zone.endX / TILE);
+  const width = endTx - startTx;
+  const ratios =
+    zone.id === "deep"
+      ? [0.05, 0.15, 0.27]
+      : count === 1
+        ? [0.5]
+        : [0.34, 0.67];
+
+  return ratios.slice(0, count).map((ratio, index) => {
+    const jitter = Math.round((random() - 0.5) * (zone.id === "deep" ? 14 : 28));
+    return clamp(Math.round(startTx + width * ratio + jitter + Math.sin(index * 2.1 + width) * 5), startTx + 12, endTx - 12);
+  });
+}
+
+function firstDropoffCaveEntranceTx() {
+  const startTx = Math.floor(ZONES[2].startX / TILE);
+  const endTx = Math.floor(ZONES[2].endX / TILE);
+  const minDepthY = depthToY(200);
+  for (let tx = startTx; tx < endTx; tx += 1) {
+    if (seafloorTileFor(tx) * TILE >= minDepthY) {
+      return clamp(tx + 8, startTx + 12, endTx - 12);
+    }
+  }
+  return startTx + 12;
+}
+
+function carveCaveCellularField(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  random: () => number,
+  seed: number,
+) {
+  const startTx = Math.floor(spec.zone.startX / TILE);
+  const endTx = Math.floor(spec.zone.endX / TILE);
+  const open = Array.from({ length: GRID_H }, () => Array.from({ length: GRID_W }, () => false));
+
+  for (let tx = startTx + 2; tx < endTx - 2; tx += 1) {
+    const floor = seafloorTileFor(tx);
+    const bottom = caveBottomTileFor(tx);
+    const bandHeight = Math.max(1, bottom - floor);
+    const cavernStart = floor + deepCavernOffsetTiles(spec.zone);
+    for (let ty = cavernStart; ty < bottom - 2; ty += 1) {
+      if (protectedSolid[ty]?.[tx]) continue;
+      const depthT = (ty - floor) / bandHeight;
+      const bulkBias = spec.zone.id === "deep" ? -0.32 : -0.18;
+      const broad = layeredNoise2D(tx * 0.038, ty * 0.072, 4, seed + 193);
+      const medium = layeredNoise2D(tx * 0.115, ty * 0.16, 3, seed + 877);
+      const vein = Math.sin(tx * 0.054 + ty * 0.092 + seed * 0.001) * 0.18;
+      const centered = 1 - Math.abs(depthT - 0.54) * 1.25;
+      const score = broad * 0.5 + medium * 0.25 + vein + centered * 0.2 + bulkBias;
+      open[ty][tx] = score > 0.5 || (random() < 0.004 && depthT > 0.28 && depthT < 0.92);
+    }
+  }
+
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = open.map((row) => row.slice());
+    for (let tx = startTx + 2; tx < endTx - 2; tx += 1) {
+      for (let ty = seafloorTileFor(tx) + deepCavernOffsetTiles(spec.zone); ty < caveBottomTileFor(tx) - 2; ty += 1) {
+        const neighbors = countOpenNeighbors(open, tx, ty);
+        next[ty][tx] = neighbors >= 6 || (open[ty][tx] && neighbors >= 5);
+      }
+    }
+    for (let tx = startTx + 2; tx < endTx - 2; tx += 1) {
+      for (let ty = seafloorTileFor(tx) + deepCavernOffsetTiles(spec.zone); ty < caveBottomTileFor(tx) - 2; ty += 1) {
+        open[ty][tx] = next[ty][tx];
+      }
+    }
+  }
+
+  for (let tx = startTx + 2; tx < endTx - 2; tx += 1) {
+    for (let ty = seafloorTileFor(tx) + deepCavernOffsetTiles(spec.zone); ty < caveBottomTileFor(tx) - 2; ty += 1) {
+      if (open[ty][tx] && countOpenNeighbors(open, tx, ty) >= 4) {
+        carveCaveCircle(solid, tx, ty, 1, protectedSolid);
+      }
+    }
+  }
+}
+
+function carveCaveEntrancesForSpec(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  entrances: number[],
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+) {
+  const anchors: CaveAnchor[] = [];
+  for (const tx of entrances) {
+    const trackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+    const floor = seafloorTileFor(tx);
+    const anchorTy = spec.zone.id === "deep"
+      ? carveHorizontalLedgeCaveMouth(solid, protectedSolid, tx)
+      : clamp(floor + 7, WATERLINE_TILE + 7, caveBottomTileFor(tx) - 2);
+    if (spec.zone.id !== "deep") carveLargeCaveMouth(solid, tx);
+    carveCaveCircle(solid, tx, anchorTy, 5, protectedSolid);
+    claimCaveArea(caveClaims, tx, anchorTy, 7, trackId, spec.mergeFamily);
+    carveSmallNodeCavern(solid, protectedSolid, tx, anchorTy, caveClaims, trackId, spec.mergeFamily, randomFromTrack(trackId));
+    anchors.push({ tx, ty: anchorTy });
+  }
+  return anchors;
+}
+
+function carveRandomWalkerMaze(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  anchors: CaveAnchor[],
+  random: () => number,
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+) {
+  if (spec.zone.id === "deep") {
+    return carveDropoffMainTrackCaves(solid, protectedSolid, spec, anchors, random, caveClaims, trackCounter);
+  }
+
+  const targets = createSpreadCaveTargets(spec, random);
+
+  for (const target of targets) {
+    const { tx, ty } = target;
+    const trackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+    carveSmallNodeCavern(solid, protectedSolid, tx, ty, caveClaims, trackId, spec.mergeFamily, random);
+    carveCaveJunction(solid, tx, ty, random, protectedSolid, caveClaims, trackId, spec.mergeFamily, false);
+  }
+
+  const orderedTargets = [...targets].sort((a, b) => a.tx - b.tx || a.ty - b.ty);
+  for (let index = 0; index < orderedTargets.length - 1; index += 1) {
+    if (index % 3 !== 2) {
+      carveWindyWalkerPath(
+        solid,
+        protectedSolid,
+        orderedTargets[index],
+        orderedTargets[index + 1],
+        spec,
+        random,
+        caveClaims,
+        trackCounter,
+      );
+    }
+  }
+
+  for (const anchor of anchors) {
+    const nearest = nearestCaveTarget(anchor, targets);
+    if (nearest) {
+      carveWindyWalkerPath(solid, protectedSolid, anchor, nearest, spec, random, caveClaims, trackCounter);
+    }
+  }
+
+  for (let i = 0; i < spec.walkerCount; i += 1) {
+    if (orderedTargets.length === 0) break;
+    const from = i < anchors.length
+      ? anchors[i]
+      : orderedTargets[(i * 7 + Math.floor(random() * 5)) % orderedTargets.length] ?? anchors[0];
+    const hopScale = 0.28;
+    const hop = 3 + Math.floor(random() * Math.max(4, orderedTargets.length * hopScale));
+    const fromIndex = Math.max(0, orderedTargets.indexOf(from));
+    const to = orderedTargets[(fromIndex + hop + i) % orderedTargets.length]
+      ?? orderedTargets[Math.floor(random() * orderedTargets.length)]
+      ?? anchors[0];
+    carveWindyWalkerPath(solid, protectedSolid, from, to, spec, random, caveClaims, trackCounter);
+  }
+
+  for (let i = 0; i < anchors.length - 1; i += 1) {
+    carveWindyWalkerPath(solid, protectedSolid, anchors[i], anchors[i + 1], spec, random, caveClaims, trackCounter, undefined, true);
+  }
+
+  return targets;
+}
+
+function carveDropoffMainTrackCaves(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  anchors: CaveAnchor[],
+  random: () => number,
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+) {
+  const targets: CaveAnchor[] = [];
+  const terminalStartTx = Math.floor((ZONES[1].startX + 900) / TILE);
+  const terminalEndTx = Math.floor((ZONES[1].endX - 900) / TILE);
+  const terminalMinTy = Math.floor(5000 / TILE);
+
+  for (let index = 0; index < anchors.length; index += 1) {
+    const start = anchors[index];
+    const terminalTx = clamp(
+      Math.round(lerp(terminalEndTx, terminalStartTx, (index + 0.42 + random() * 0.22) / Math.max(1, anchors.length))),
+      terminalStartTx,
+      terminalEndTx,
+    );
+    let terminal = {
+      tx: terminalTx,
+      ty: clamp(
+        terminalMinTy + Math.floor(random() * 80),
+        seafloorTileFor(terminalTx) + 12,
+        caveBottomTileForSpec(spec, terminalTx) - 14,
+      ),
+    };
+    const terminalTrackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+    const terminalRadiusX = 26 + Math.floor(random() * 9);
+    const terminalRadiusY = 14 + Math.floor(random() * 5);
+    const terminalFootprintRadius = Math.max(terminalRadiusX, terminalRadiusY);
+    for (let attempt = 0; attempt < 5 && !canPlaceCavern(trackCounter, terminal.tx, terminal.ty, terminalFootprintRadius); attempt += 1) {
+      terminal = {
+        tx: terminal.tx,
+        ty: clamp(
+          terminal.ty + terminalFootprintRadius + MIN_CAVERN_SPACING_TILES + attempt * 8,
+          seafloorTileFor(terminal.tx) + 12,
+          caveBottomTileForSpec(spec, terminal.tx) - terminalFootprintRadius - 3,
+        ),
+      };
+    }
+    const carvedTerminalCavern = canPlaceCavern(trackCounter, terminal.tx, terminal.ty, terminalFootprintRadius);
+    if (carvedTerminalCavern) {
+      carveClaimedCaveEllipse(
+        solid,
+        protectedSolid,
+        terminal.tx,
+        terminal.ty,
+        terminalRadiusX,
+        terminalRadiusY,
+        spec.mergeFamily,
+        caveClaims,
+        terminalTrackId,
+        random,
+        false,
+        spec,
+      );
+      registerCavernFootprint(trackCounter, terminal.tx, terminal.ty, terminalFootprintRadius);
+    }
+    targets.push(terminal);
+
+    const waypointCount = 5 + Math.floor(random() * 3);
+    const route: CaveAnchor[] = [start];
+    for (let waypoint = 1; waypoint <= waypointCount; waypoint += 1) {
+      const t = waypoint / (waypointCount + 1);
+      const tx = Math.round(lerp(start.tx, terminal.tx, t) + randomNormal(random, 0, 38));
+      const targetY = lerp(start.ty, terminal.ty, smooth01(t)) + randomNormal(random, 0, 30);
+      const node = {
+        tx: clamp(tx, caveSpecStartTx(spec) + 8, caveSpecEndTx(spec) - 8),
+        ty: clamp(
+          Math.round(targetY),
+          seafloorTileFor(tx) + deepCavernOffsetTiles(spec, tx),
+          caveBottomTileForSpec(spec, tx) - 10,
+        ),
+      };
+      route.push(node);
+      const nodeTrackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+      carveSmallNodeCavern(solid, protectedSolid, node.tx, node.ty, caveClaims, nodeTrackId, spec.mergeFamily, random);
+      targets.push(node);
+    }
+    route.push(terminal);
+
+    for (let segment = 0; segment < route.length - 1; segment += 1) {
+      const trackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+      carveWindyWalkerPath(
+        solid,
+        protectedSolid,
+        route[segment],
+        route[segment + 1],
+        spec,
+        random,
+        caveClaims,
+        trackCounter,
+        trackId,
+        true,
+      );
+      validateCaveRouteConnection(
+        solid,
+        protectedSolid,
+        spec,
+        route[segment],
+        route[segment + 1],
+        caveClaims,
+        trackId,
+      );
+    }
+
+    for (let branch = 1; branch < route.length - 1; branch += 1) {
+      const branchTrackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+      tryCarveSideBranch(solid, protectedSolid, route[branch], random() * Math.PI * 2, spec, random, caveClaims, branchTrackId, trackCounter);
+    }
+  }
+
+  return targets;
+}
+
+function validateCaveRouteConnection(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  start: CaveAnchor,
+  goal: CaveAnchor,
+  caveClaims: CaveClaimMap,
+  trackId: number,
+) {
+  const bounds = cavePathBounds(spec, start, goal);
+  const existing = findAStarPath(solid, start, goal, bounds, false, protectedSolid);
+  if (existing) return;
+  const repair = findAStarPath(solid, start, goal, bounds, true, protectedSolid);
+  if (!repair) return;
+
+  for (let step = 0; step < repair.length; step += 1) {
+    const point = repair[step];
+    const radius = step % 17 === 0 ? 2 : 1;
+    if (!canClaimCaveArea(caveClaims, point.tx, point.ty, radius + 1, trackId, spec.mergeFamily, true)) {
+      continue;
+    }
+    carveCaveCircle(solid, point.tx, point.ty, radius, protectedSolid);
+    claimCaveArea(caveClaims, point.tx, point.ty, radius + 1, trackId, spec.mergeFamily);
+  }
+}
+
+function createSpreadCaveTargets(spec: CaveSystemSpec, random: () => number) {
+  const startTx = caveSpecStartTx(spec) + 20;
+  const endTx = caveSpecEndTx(spec) - 20;
+  const widthTiles = Math.max(1, endTx - startTx);
+  const columns = Math.max(2, Math.ceil(Math.sqrt(spec.bulkTrackCount * (widthTiles / 520))));
+  const rows = Math.max(2, Math.ceil(spec.bulkTrackCount / columns));
+  const targets: CaveAnchor[] = [];
+  const minDistance = spec.zone.id === "surface" ? 48 : spec.zone.id === "deep" ? 42 : 44;
+
+  for (let row = 0; row < rows && targets.length < spec.bulkTrackCount; row += 1) {
+    for (let column = 0; column < columns && targets.length < spec.bulkTrackCount; column += 1) {
+      const baseT = (column + 0.5) / columns;
+      const jitterT = (random() - 0.5) * (0.55 / columns);
+      const tx = clamp(
+        Math.round(startTx + (baseT + jitterT) * widthTiles),
+        startTx,
+        endTx,
+      );
+      const floor = seafloorTileFor(tx);
+      const bottom = caveBottomTileForSpec(spec, tx);
+      const cavernMin = clamp(
+        floor + deepCavernOffsetTiles(spec, tx),
+        floor + 8,
+        Math.max(floor + 8, bottom - 9),
+      );
+      const cavernMax = bottom - 6;
+      const depthT = clamp((row + 0.5 + (random() - 0.5) * 0.48) / rows, 0, 1);
+      const ty = clamp(
+        Math.round(lerp(cavernMin, cavernMax, depthT)),
+        cavernMin,
+        cavernMax,
+      );
+      const candidate = { tx, ty };
+
+      if (targets.every((target) => manhattan(target, candidate) >= minDistance)) {
+        targets.push(candidate);
+      }
+    }
+  }
+
+  for (let attempt = 0; targets.length < spec.bulkTrackCount && attempt < spec.bulkTrackCount * 12; attempt += 1) {
+    const tx = startTx + Math.floor(random() * Math.max(1, endTx - startTx));
+    const floor = seafloorTileFor(tx);
+    const bottom = caveBottomTileForSpec(spec, tx);
+    const cavernMin = clamp(floor + deepCavernOffsetTiles(spec, tx), floor + 8, Math.max(floor + 8, bottom - 9));
+    const cavernMax = bottom - 6;
+    const candidate = {
+      tx,
+      ty: Math.round(lerp(cavernMin, cavernMax, random())),
+    };
+    if (targets.every((target) => manhattan(target, candidate) >= Math.max(12, minDistance * 0.65))) {
+      targets.push(candidate);
+    }
+  }
+
+  return targets;
+}
+
+function nearestCaveTarget(anchor: CaveAnchor, targets: CaveAnchor[]) {
+  let best: CaveAnchor | undefined;
+  let bestDistance = Infinity;
+  for (const target of targets) {
+    const distance = manhattan(anchor, target);
+    if (distance < bestDistance) {
+      best = target;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function caveSpecStartTx(spec: CaveSystemSpec) {
+  return Math.floor((spec.carveStartX ?? spec.zone.startX) / TILE);
+}
+
+function caveSpecEndTx(spec: CaveSystemSpec) {
+  return Math.floor((spec.carveEndX ?? spec.zone.endX) / TILE);
+}
+
+function nextCaveTrack(counter: CaveTrackCounter, family: CaveClaimFamily) {
+  const trackId = counter.value;
+  counter.value += 1;
+  counter.families.set(trackId, family);
+  return trackId;
+}
+
+function canClaimCaveArea(
+  caveClaims: CaveClaimMap,
+  cx: number,
+  cy: number,
+  radius: number,
+  trackId: number,
+  family: CaveClaimFamily,
+  allowMerge: boolean,
+) {
+  for (let y = cy - radius; y <= cy + radius; y += 1) {
+    for (let x = cx - radius; x <= cx + radius; x += 1) {
+      if (Math.hypot(x - cx, y - cy) > radius) continue;
+      const claim = caveClaims.get(tileKey(x, y));
+      if (claim === undefined || claim.trackId === trackId) continue;
+      if (claim.family !== family) return false;
+      if (!allowMerge) return false;
+    }
+  }
+  return true;
+}
+
+function claimCaveArea(
+  caveClaims: CaveClaimMap,
+  cx: number,
+  cy: number,
+  radius: number,
+  trackId: number,
+  family: CaveClaimFamily,
+) {
+  for (let y = cy - radius; y <= cy + radius; y += 1) {
+    for (let x = cx - radius; x <= cx + radius; x += 1) {
+      if (Math.hypot(x - cx, y - cy) > radius) continue;
+      caveClaims.set(tileKey(x, y), { trackId, family });
+    }
+  }
+}
+
+function carveWindyWalkerPath(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  start: CaveAnchor,
+  goal: CaveAnchor,
+  spec: CaveSystemSpec,
+  random: () => number,
+  caveClaims?: CaveClaimMap,
+  trackCounter?: CaveTrackCounter,
+  inheritedTrackId?: number,
+  forceMergeAllowed = false,
+) {
+  let x = start.tx;
+  let y = start.ty;
+  const startTx = caveSpecStartTx(spec) + 4;
+  const endTx = caveSpecEndTx(spec) - 4;
+  const distanceScale = spec.zone.id === "deep" ? 3.1 : 2.2;
+  const verticalScale = spec.zone.id === "deep" ? 3.4 : 2.7;
+  const stepPadding = spec.zone.id === "deep" ? 180 : 90;
+  const maxSteps = Math.ceil(Math.abs(goal.tx - start.tx) * distanceScale + Math.abs(goal.ty - start.ty) * verticalScale + stepPadding);
+  let heading = random() * Math.PI * 2;
+  const trackId = inheritedTrackId ?? (trackCounter ? nextCaveTrack(trackCounter, spec.mergeFamily) : 0);
+  const trackFamily = trackCounter?.families.get(trackId) ?? spec.mergeFamily;
+  const allowIndependentMerge = spec.mergeFamily === "roaming" && (forceMergeAllowed || random() < 0.08);
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    const dx = goal.tx - x;
+    const dy = goal.ty - y;
+    if (Math.hypot(dx, dy) < 3) break;
+
+    const targetAngle = Math.atan2(dy, dx);
+    heading = lerpAngle(heading, targetAngle, 0.075 + random() * 0.06);
+    heading += (random() - 0.5) * 1.0 + Math.sin(step * 0.22 + start.tx) * 0.16;
+    x += Math.cos(heading) * (0.92 + random() * 0.62);
+    y += Math.sin(heading) * (0.72 + random() * 0.54);
+    x = clamp(x, startTx, endTx);
+    y = clamp(y, seafloorTileFor(Math.round(x)) + 4, caveBottomTileForSpec(spec, Math.round(x)) - 3);
+
+    const widthPulse = Math.sin(step * 0.31 + goal.tx * 0.07) * 0.34;
+    const radius = Math.round(clamp(spec.corridorRadius + widthPulse + randomNormal(random, 0, 0.12), 1, 2));
+    const tx = Math.round(x);
+    const ty = Math.round(y);
+    if (
+      caveClaims &&
+      trackId > 0 &&
+      !canClaimCaveArea(caveClaims, tx, ty, radius + 2, trackId, trackFamily, allowIndependentMerge)
+    ) {
+      if (forceMergeAllowed) {
+        heading += random() > 0.5 ? 1.15 : -1.15;
+        x = clamp(x - Math.cos(heading) * 1.8, startTx, endTx);
+        y = clamp(y - Math.sin(heading) * 1.4, seafloorTileFor(Math.round(x)) + 4, caveBottomTileForSpec(spec, Math.round(x)) - 3);
+        continue;
+      }
+      carveOrganicCaveTerminus(solid, protectedSolid, Math.round(x), Math.round(y), trackFamily, caveClaims, trackId, random, trackCounter, spec);
+      return;
+    }
+    carveCaveCircle(solid, tx, ty, radius, protectedSolid);
+    if (caveClaims && trackId > 0) claimCaveArea(caveClaims, tx, ty, radius + 1, trackId, trackFamily);
+    if (step > 18 && step % spec.branchCadence === 0 && random() < spec.sideBranchChance) {
+      tryCarveSideBranch(solid, protectedSolid, { tx, ty }, heading, spec, random, caveClaims, trackId, trackCounter);
+    }
+    if (step % 53 === 0 && isDeepCavernTile(spec, tx, ty) && random() < 0.08) {
+      carveCaveJunction(solid, tx, ty, random, protectedSolid, caveClaims, trackId, trackFamily, allowIndependentMerge);
+    }
+  }
+
+  carveOrganicCaveTerminus(solid, protectedSolid, Math.round(x), Math.round(y), trackFamily, caveClaims, trackId, random, trackCounter, spec);
+}
+
+function carveLargeCavernBudget(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  targets: CaveAnchor[],
+  random: () => number,
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+) {
+  const eligible = targets
+    .filter((target) => isDeepCavernTile(spec, target.tx, target.ty))
+    .sort((a, b) => a.tx - b.tx || b.ty - a.ty);
+  const count = clamp(spec.largeCavernCount, 1, 3);
+  const selected: CaveAnchor[] = [];
+
+  for (let index = 0; index < Math.min(count, eligible.length); index += 1) {
+    const targetIndex = Math.round(((index + 0.5) / count) * (eligible.length - 1));
+    const target = eligible[targetIndex];
+    if (!target || selected.some((candidate) => manhattan(candidate, target) < 34)) continue;
+    selected.push(target);
+    const width = 8 + Math.floor(random() * 5);
+    const height = 4 + Math.floor(random() * 3);
+    const trackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+    const footprintRadius = Math.max(width, height);
+    if (!canPlaceCavern(trackCounter, target.tx, target.ty, footprintRadius)) continue;
+    if (!canClaimCaveArea(caveClaims, target.tx, target.ty, footprintRadius + 5, trackId, spec.mergeFamily, false)) continue;
+    carveCaveChamber(solid, target.tx, target.ty, width, height);
+    claimCaveArea(caveClaims, target.tx, target.ty, footprintRadius + 2, trackId, spec.mergeFamily);
+    registerCavernFootprint(trackCounter, target.tx, target.ty, footprintRadius);
+
+    for (let spoke = 0; spoke < 2; spoke += 1) {
+      tryCarveSideBranch(solid, protectedSolid, target, (Math.PI * 2 * spoke) / 3 + random() * 0.5, spec, random, caveClaims, trackId, trackCounter);
+    }
+  }
+}
+
+function carveCaveJunction(
+  solid: boolean[][],
+  tx: number,
+  ty: number,
+  random: () => number,
+  protectedSolid?: boolean[][],
+  caveClaims?: CaveClaimMap,
+  trackId = 0,
+  family: CaveClaimFamily = "roaming",
+  allowMerge = false,
+) {
+  const radius = 1;
+  if (caveClaims && trackId > 0 && !canClaimCaveArea(caveClaims, tx, ty, radius + 1, trackId, family, allowMerge)) return;
+  carveCaveCircle(solid, tx, ty, radius, protectedSolid);
+  if (caveClaims && trackId > 0) claimCaveArea(caveClaims, tx, ty, radius + 1, trackId, family);
+  if (random() > 0.68) {
+    const offsetTx = tx + (random() > 0.5 ? 1 : -1);
+    if (!caveClaims || trackId <= 0 || canClaimCaveArea(caveClaims, offsetTx, ty, 1, trackId, family, allowMerge)) {
+      carveCaveCircle(solid, offsetTx, ty, 1, protectedSolid);
+      if (caveClaims && trackId > 0) claimCaveArea(caveClaims, offsetTx, ty, 1, trackId, family);
+    }
+  }
+}
+
+function carveSideBranch(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  start: CaveAnchor,
+  heading: number,
+  spec: CaveSystemSpec,
+  random: () => number,
+  caveClaims?: CaveClaimMap,
+  trackId = 0,
+  trackCounter?: CaveTrackCounter,
+) {
+  const trackFamily = spec.mergeFamily;
+  const startTx = caveSpecStartTx(spec) + 4;
+  const endTx = caveSpecEndTx(spec) - 4;
+  let x = start.tx;
+  let y = start.ty;
+  let branchHeading = heading + (random() > 0.5 ? 1 : -1) * (0.9 + random() * 0.65);
+  const length = spec.sideBranchMinLength
+    + Math.floor(random() * Math.max(1, spec.sideBranchMaxLength - spec.sideBranchMinLength + 1));
+
+  for (let step = 0; step < length; step += 1) {
+    branchHeading += (random() - 0.5) * 0.42 + Math.sin((start.tx + step) * 0.29) * 0.08;
+    x += Math.cos(branchHeading) * (0.85 + random() * 0.45);
+    y += Math.sin(branchHeading) * (0.68 + random() * 0.4);
+    const tx = Math.round(clamp(x, startTx, endTx));
+    const minY = seafloorTileFor(tx) + 5;
+    const maxY = caveBottomTileForSpec(spec, tx) - 4;
+    y = clamp(y, minY, maxY);
+    const ty = Math.round(y);
+    const radius = step % 13 === 0 ? 2 : 1;
+    if (caveClaims && trackId > 0 && !canClaimCaveArea(caveClaims, tx, ty, radius + 2, trackId, trackFamily, false)) {
+      carveOrganicCaveTerminus(solid, protectedSolid, Math.round(x), Math.round(y), trackFamily, caveClaims, trackId, random, trackCounter, spec);
+      return;
+    }
+    carveCaveCircle(solid, tx, ty, radius, protectedSolid);
+    if (caveClaims && trackId > 0) claimCaveArea(caveClaims, tx, ty, radius + 1, trackId, trackFamily);
+  }
+  carveOrganicCaveTerminus(solid, protectedSolid, Math.round(x), Math.round(y), trackFamily, caveClaims, trackId, random, trackCounter, spec);
+}
+
+function tryCarveSideBranch(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  start: CaveAnchor,
+  heading: number,
+  spec: CaveSystemSpec,
+  random: () => number,
+  caveClaims?: CaveClaimMap,
+  trackId = 0,
+  trackCounter?: CaveTrackCounter,
+) {
+  if (trackCounter && !canStartBranch(trackCounter, start)) return;
+  if (trackCounter) registerBranchStart(trackCounter, start);
+  carveSideBranch(solid, protectedSolid, start, heading, spec, random, caveClaims, trackId, trackCounter);
+}
+
+function randomFromTrack(trackId: number) {
+  return mulberry32((trackId * 0x9e3779b1) >>> 0);
+}
+
+function carveSmallNodeCavern(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  tx: number,
+  ty: number,
+  caveClaims: CaveClaimMap,
+  trackId: number,
+  family: CaveClaimFamily,
+  random: () => number,
+) {
+  const radiusX = random() > 0.55 ? 3 : 2;
+  const radiusY = random() > 0.5 ? 2 : 1;
+  for (let y = ty - radiusY; y <= ty + radiusY; y += 1) {
+    for (let x = tx - radiusX; x <= tx + radiusX; x += 1) {
+      const distance = Math.hypot((x - tx) / radiusX, (y - ty) / Math.max(1, radiusY));
+      if (distance > 1) continue;
+      if (!canClaimCaveArea(caveClaims, x, y, 1, trackId, family, false)) continue;
+      carveCaveCircle(solid, x, y, 1, protectedSolid);
+      claimCaveArea(caveClaims, x, y, 1, trackId, family);
+    }
+  }
+}
+
+function carveOrganicCaveTerminus(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  tx: number,
+  ty: number,
+  family: CaveClaimFamily,
+  caveClaims: CaveClaimMap | undefined,
+  trackId: number,
+  random: () => number,
+  trackCounter?: CaveTrackCounter,
+  spec?: CaveSystemSpec,
+) {
+  if (tx <= 2 || tx >= GRID_W - 3 || ty <= WATERLINE_TILE + 2 || ty >= GRID_H - 5) return;
+  const sharedTerminus = findNearbyTerminus(trackCounter, family, tx, ty);
+  const targetTx = sharedTerminus?.tx ?? tx;
+  const targetTy = sharedTerminus?.ty ?? ty;
+  const radiusX = sharedTerminus ? 14 : 10 + Math.floor(random() * 5);
+  const radiusY = sharedTerminus ? 8 : 6 + Math.floor(random() * 3);
+  const centerTx = clamp(targetTx + Math.round(randomNormal(random, 0, 0.8)), 2, GRID_W - 3);
+  const centerTy = clamp(
+    targetTy + Math.round(randomNormal(random, 0, 0.7)),
+    seafloorTileFor(centerTx) + 3,
+    (spec ? caveBottomTileForSpec(spec, centerTx) : caveBottomTileFor(centerTx)) - 3,
+  );
+  const footprintRadius = Math.max(radiusX, radiusY);
+  if (!sharedTerminus && trackCounter && !canPlaceCavern(trackCounter, centerTx, centerTy, footprintRadius)) return;
+
+  carveClaimedCaveEllipse(
+    solid,
+    protectedSolid,
+    centerTx,
+    centerTy,
+    radiusX,
+    radiusY,
+    family,
+    caveClaims,
+    trackId,
+    random,
+    Boolean(sharedTerminus),
+    spec,
+  );
+  if (!sharedTerminus) {
+    registerTerminus(trackCounter, family, { tx, ty });
+    registerCavernFootprint(trackCounter, centerTx, centerTy, footprintRadius);
+  }
+}
+
+const MIN_CAVERN_SPACING_TILES = 30;
+const MIN_BRANCH_START_SPACING_TILES = 18;
+const MIN_BRANCH_TO_CAVERN_SPACING_TILES = 12;
+
+function canPlaceCavern(trackCounter: CaveTrackCounter, tx: number, ty: number, radius: number) {
+  return trackCounter.cavernFootprints.every((cavern) =>
+    Math.hypot(cavern.tx - tx, cavern.ty - ty) >= cavern.radius + radius + MIN_CAVERN_SPACING_TILES,
+  );
+}
+
+function registerCavernFootprint(trackCounter: CaveTrackCounter | undefined, tx: number, ty: number, radius: number) {
+  if (!trackCounter) return;
+  trackCounter.cavernFootprints.push({ tx, ty, radius });
+  if (trackCounter.cavernFootprints.length > 180) {
+    trackCounter.cavernFootprints.splice(0, trackCounter.cavernFootprints.length - 180);
+  }
+}
+
+function canStartBranch(trackCounter: CaveTrackCounter, start: CaveAnchor) {
+  const awayFromBranches = trackCounter.branchStarts.every((branch) =>
+    Math.hypot(branch.tx - start.tx, branch.ty - start.ty) >= MIN_BRANCH_START_SPACING_TILES,
+  );
+  if (!awayFromBranches) return false;
+  return trackCounter.cavernFootprints.every((cavern) =>
+    Math.hypot(cavern.tx - start.tx, cavern.ty - start.ty) >= cavern.radius + MIN_BRANCH_TO_CAVERN_SPACING_TILES,
+  );
+}
+
+function registerBranchStart(trackCounter: CaveTrackCounter, start: CaveAnchor) {
+  trackCounter.branchStarts.push(start);
+  if (trackCounter.branchStarts.length > 260) {
+    trackCounter.branchStarts.splice(0, trackCounter.branchStarts.length - 260);
+  }
+}
+
+function carveClaimedCaveEllipse(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  centerTx: number,
+  centerTy: number,
+  radiusX: number,
+  radiusY: number,
+  family: CaveClaimFamily,
+  caveClaims: CaveClaimMap | undefined,
+  trackId: number,
+  random: () => number,
+  allowMerge: boolean,
+  spec?: CaveSystemSpec,
+) {
+  for (let y = centerTy - radiusY; y <= centerTy + radiusY; y += 1) {
+    for (let x = centerTx - radiusX; x <= centerTx + radiusX; x += 1) {
+      if (
+        x <= 1 ||
+        x >= GRID_W - 2 ||
+        y <= WATERLINE_TILE + 1 ||
+        y >= GRID_H - 5 ||
+        y < seafloorTileFor(x) + 2 ||
+        y > (spec ? caveBottomTileForSpec(spec, x) : caveBottomTileFor(x)) - 2 ||
+        protectedSolid[y]?.[x]
+      ) {
+        continue;
+      }
+      const wobble = 1 + Math.sin(x * 0.71 + centerTy) * 0.08 + Math.sin(y * 0.53 + centerTx) * 0.06;
+      const distance = Math.hypot((x - centerTx) / radiusX, (y - centerTy) / Math.max(1, radiusY));
+      if (distance > wobble) continue;
+      if (
+        caveClaims &&
+        trackId > 0 &&
+        !canClaimCaveArea(caveClaims, x, y, 1, trackId, family, allowMerge)
+      ) {
+        continue;
+      }
+      solid[y][x] = false;
+      if (caveClaims && trackId > 0) claimCaveArea(caveClaims, x, y, 1, trackId, family);
+    }
+  }
+
+  if (random() > 0.35) {
+    carveCaveCircle(solid, centerTx, centerTy, 2, protectedSolid);
+    if (caveClaims && trackId > 0) claimCaveArea(caveClaims, centerTx, centerTy, 2, trackId, family);
+  }
+}
+
+function findNearbyTerminus(
+  trackCounter: CaveTrackCounter | undefined,
+  family: CaveClaimFamily,
+  tx: number,
+  ty: number,
+) {
+  const termini = trackCounter?.termini.get(family) ?? [];
+  let best: CaveAnchor | undefined;
+  let bestDistance = Infinity;
+  for (const terminus of termini) {
+    const distance = manhattan(terminus, { tx, ty });
+    if (distance < bestDistance && distance <= 22) {
+      best = terminus;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function registerTerminus(
+  trackCounter: CaveTrackCounter | undefined,
+  family: CaveClaimFamily,
+  terminus: CaveAnchor,
+) {
+  if (!trackCounter) return;
+  const termini = trackCounter.termini.get(family) ?? [];
+  termini.push(terminus);
+  if (termini.length > 160) termini.splice(0, termini.length - 160);
+  trackCounter.termini.set(family, termini);
+}
+
+function linkCaveSystems(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  systems: Array<{ spec: CaveSystemSpec; anchors: CaveAnchor[]; targets: CaveAnchor[] }>,
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+  random: () => number,
+) {
+  const mergeableSystems = systems.filter((system) => system.spec.mergeFamily === "roaming");
+  for (let index = 0; index < mergeableSystems.length - 1; index += 1) {
+    const left = mergeableSystems[index];
+    const right = mergeableSystems[index + 1];
+    const start = selectCaveLinkAnchor(left, "right");
+    const goal = selectCaveLinkAnchor(right, "left");
+    const trackId = nextCaveTrack(trackCounter, "roaming");
+    carveCrossBiomeCaveLink(solid, protectedSolid, start, goal, random, caveClaims, trackId, "roaming", trackCounter);
+    validateCrossBiomeCaveLink(solid, protectedSolid, start, goal, random, caveClaims, trackId, "roaming", trackCounter);
+  }
+}
+
+function selectCaveLinkAnchor(
+  system: { spec: CaveSystemSpec; anchors: CaveAnchor[]; targets: CaveAnchor[] },
+  side: "left" | "right",
+) {
+  const candidates = [...system.targets, ...system.anchors];
+  const sorted = candidates.sort((a, b) => {
+    const sideScore = side === "left" ? a.tx - b.tx : b.tx - a.tx;
+    if (sideScore !== 0) return sideScore;
+    return b.ty - a.ty;
+  });
+  return sorted[0] ?? system.anchors[0];
+}
+
+function carveCrossBiomeCaveLink(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  start: CaveAnchor,
+  goal: CaveAnchor,
+  random: () => number,
+  caveClaims?: CaveClaimMap,
+  trackId = 0,
+  family: CaveClaimFamily = "roaming",
+  trackCounter?: CaveTrackCounter,
+) {
+  let x = start.tx;
+  let y = start.ty;
+  let heading = Math.atan2(goal.ty - start.ty, goal.tx - start.tx);
+  const minTx = Math.max(2, Math.min(start.tx, goal.tx) - 18);
+  const maxTx = Math.min(GRID_W - 3, Math.max(start.tx, goal.tx) + 18);
+  const maxSteps = Math.ceil(Math.abs(goal.tx - start.tx) * 2.1 + Math.abs(goal.ty - start.ty) * 1.8 + 80);
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    const dx = goal.tx - x;
+    const dy = goal.ty - y;
+    if (Math.hypot(dx, dy) < 3) break;
+
+    const targetAngle = Math.atan2(dy, dx);
+    heading = lerpAngle(heading, targetAngle, 0.09 + random() * 0.05);
+    heading += (random() - 0.5) * 0.62 + Math.sin(step * 0.19 + start.tx) * 0.08;
+    x += Math.cos(heading) * (0.95 + random() * 0.45);
+    y += Math.sin(heading) * (0.75 + random() * 0.42);
+
+    const tx = Math.round(clamp(x, minTx, maxTx));
+    const minY = seafloorTileFor(tx) + 5;
+    const maxY = caveBottomTileFor(tx) - 4;
+    y = clamp(y, minY, maxY);
+    const ty = Math.round(y);
+    const radius = step % 19 === 0 ? 2 : 1;
+    if (
+      caveClaims &&
+      trackId > 0 &&
+      !canClaimCaveArea(caveClaims, tx, ty, radius + 2, trackId, family, random() < 0.12)
+    ) {
+      return;
+    }
+    carveCaveCircle(solid, tx, ty, radius, protectedSolid);
+    if (caveClaims && trackId > 0) claimCaveArea(caveClaims, tx, ty, radius + 1, trackId, family);
+
+    if (step > 18 && step % 37 === 0 && random() < 0.18) {
+      const zone = zoneAtX(tx * TILE);
+      tryCarveSideBranch(solid, protectedSolid, { tx, ty }, heading, {
+        zone,
+        entranceCount: 0,
+        bulkTrackCount: 0,
+        walkerCount: 0,
+        corridorRadius: 1.05,
+        largeCavernCount: 1,
+        sideBranchChance: 0.04,
+        branchCadence: 37,
+        sideBranchMinLength: 10,
+        sideBranchMaxLength: 22,
+        mergeFamily: "roaming",
+        carveStartX: BEACH_END_X,
+        carveEndX: WORLD_WIDTH,
+        seedSalt: 0,
+      }, random, caveClaims, trackId, trackCounter);
+    }
+  }
+}
+
+function validateCrossBiomeCaveLink(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  start: CaveAnchor,
+  goal: CaveAnchor,
+  random: () => number,
+  caveClaims?: CaveClaimMap,
+  trackId = 0,
+  family: CaveClaimFamily = "roaming",
+  trackCounter?: CaveTrackCounter,
+) {
+  const bounds = {
+    startTx: Math.max(2, Math.min(start.tx, goal.tx) - 28),
+    endTx: Math.min(GRID_W - 3, Math.max(start.tx, goal.tx) + 28),
+    minTy: Math.max(WATERLINE_TILE + 4, Math.min(start.ty, goal.ty) - 24),
+    maxTy: Math.min(GRID_H - 5, Math.max(start.ty, goal.ty) + depthMetersToTiles(38)),
+  };
+  const existing = findAStarPath(solid, start, goal, bounds, false, protectedSolid);
+  if (existing) return;
+  const repair = findAStarPath(solid, start, goal, bounds, true, protectedSolid);
+  if (!repair) {
+    carveCrossBiomeCaveLink(solid, protectedSolid, start, goal, random, caveClaims, trackId, family, trackCounter);
+    return;
+  }
+  for (let step = 0; step < repair.length; step += 1) {
+    const point = repair[step];
+    const radius = step % 11 === 0 ? 2 : 1;
+    if (
+      caveClaims &&
+      trackId > 0 &&
+      !canClaimCaveArea(caveClaims, point.tx, point.ty, radius + 2, trackId, family, step % 29 === 0)
+    ) {
+      break;
+    }
+    carveCaveCircle(solid, point.tx, point.ty, radius, protectedSolid);
+    if (caveClaims && trackId > 0) claimCaveArea(caveClaims, point.tx, point.ty, radius + 1, trackId, family);
+  }
+}
+
+function deepCavernOffsetTiles(scope: OceanZone | CaveSystemSpec, tx = 0) {
+  const zone = "mergeFamily" in scope ? scope.zone : scope;
+  const meters = zone.id === "deep" ? 42 : 36;
+  if ("mergeFamily" in scope && scope.zone.id === "deep" && tx * TILE < ZONES[2].startX) {
+    return Math.max(12, depthMetersToTiles(82));
+  }
+  return Math.max(10, depthMetersToTiles(meters));
+}
+
+function isDeepCavernTile(scope: OceanZone | CaveSystemSpec, tx: number, ty: number) {
+  return ty >= seafloorTileFor(tx) + deepCavernOffsetTiles(scope, tx);
+}
+
+function validateSeededCaveNetwork(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  spec: CaveSystemSpec,
+  anchors: CaveAnchor[],
+  random: () => number,
+  caveClaims: CaveClaimMap,
+  trackCounter: CaveTrackCounter,
+) {
+  if (anchors.length < 2) return;
+  const root = anchors[0];
+  for (let index = 1; index < anchors.length; index += 1) {
+    const target = anchors[index];
+    const bounds = cavePathBounds(spec, root, target);
+    const existing = findAStarPath(solid, root, target, bounds, false, protectedSolid);
+    if (existing) continue;
+
+    const repair = findAStarPath(solid, root, target, bounds, true, protectedSolid);
+    const repairTrackId = nextCaveTrack(trackCounter, spec.mergeFamily);
+    if (repair) {
+      for (let step = 0; step < repair.length; step += 1) {
+        const point = repair[step];
+        const radius = step % 17 === 0 ? 2 : 1;
+        if (!canClaimCaveArea(caveClaims, point.tx, point.ty, radius + 2, repairTrackId, spec.mergeFamily, step % 37 === 0)) {
+          break;
+        }
+        carveCaveCircle(solid, point.tx, point.ty, radius, protectedSolid);
+        claimCaveArea(caveClaims, point.tx, point.ty, radius + 1, repairTrackId, spec.mergeFamily);
+      }
+    } else {
+      carveWindyWalkerPath(
+        solid,
+        protectedSolid,
+        root,
+        target,
+        {
+          zone: spec.zone,
+          entranceCount: 0,
+          bulkTrackCount: 0,
+          walkerCount: 0,
+          corridorRadius: 1.2,
+          largeCavernCount: 1,
+          sideBranchChance: spec.sideBranchChance,
+          branchCadence: spec.branchCadence,
+          sideBranchMinLength: spec.sideBranchMinLength,
+          sideBranchMaxLength: spec.sideBranchMaxLength,
+          mergeFamily: spec.mergeFamily,
+          carveStartX: spec.carveStartX,
+          carveEndX: spec.carveEndX,
+          seedSalt: 0,
+        },
+        random,
+        caveClaims,
+        trackCounter,
+        repairTrackId,
+        true,
+      );
+    }
+  }
+}
+
+function lerpAngle(from: number, to: number, t: number) {
+  let delta = ((to - from + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return from + delta * t;
 }
 
 function carveCaveZone(
@@ -415,7 +1572,6 @@ function caveEntranceCount(zone: OceanZone, zoneWidthTiles: number) {
 }
 
 function carveDeepCaveMazes(solid: boolean[][], random: () => number) {
-  const caveExtentTiles = depthMetersToTiles(CAVE_VERTICAL_EXTENT_METERS);
   for (const zone of ZONES) {
     const startTx = Math.floor(zone.startX / TILE);
     const endTx = Math.floor(zone.endX / TILE);
@@ -426,7 +1582,7 @@ function carveDeepCaveMazes(solid: boolean[][], random: () => number) {
       const floorTy = seafloorTileFor(tx);
       const startY = clamp(floorTy + 10, WATERLINE_TILE + 8, GRID_H - 8);
       const bottomY = clamp(
-        floorTy + caveExtentTiles,
+        GRID_H - 6,
         startY + 6,
         GRID_H - 6,
       );
@@ -485,7 +1641,7 @@ function carveDeepCaveMazes(solid: boolean[][], random: () => number) {
       const right = entrances[loop + 1];
       const connectorBottomY = Math.min(
         GRID_H - 6,
-        Math.max(seafloorTileFor(left), seafloorTileFor(right)) + caveExtentTiles,
+        GRID_H - 6,
       );
       const y = clamp(
         Math.max(seafloorTileFor(left), seafloorTileFor(right)) + 22 + loop * 7,
@@ -511,11 +1667,8 @@ function smoothCaveEdges(solid: boolean[][]) {
       for (let x = 2; x < GRID_W - 2; x += 1) {
         if (!isWithinCaveBand(x, y)) continue;
         const openNeighbors = countOpenNeighborsFromSolid(solid, x, y);
-        const solidNeighbors = countSolidNeighbors(solid, x, y);
         if (solid[y][x] && openNeighbors >= 5) {
           next[y][x] = false;
-        } else if (!solid[y][x] && solidNeighbors >= 7) {
-          next[y][x] = true;
         }
       }
     }
@@ -525,6 +1678,122 @@ function smoothCaveEdges(solid: boolean[][]) {
       }
     }
   }
+  smoothCaveCorners(solid);
+}
+
+function smoothCaveCorners(solid: boolean[][]) {
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = solid.map((row) => row.slice());
+    for (let y = WATERLINE_TILE + 2; y < GRID_H - 4; y += 1) {
+      for (let x = 2; x < GRID_W - 2; x += 1) {
+        if (!isWithinCaveBand(x, y)) continue;
+        const openLeft = isOpenCaveCell(solid, x - 1, y);
+        const openRight = isOpenCaveCell(solid, x + 1, y);
+        const openUp = isOpenCaveCell(solid, x, y - 1);
+        const openDown = isOpenCaveCell(solid, x, y + 1);
+        const openDiagonalA = isOpenCaveCell(solid, x - 1, y - 1) || isOpenCaveCell(solid, x + 1, y + 1);
+        const openDiagonalB = isOpenCaveCell(solid, x + 1, y - 1) || isOpenCaveCell(solid, x - 1, y + 1);
+        const openNeighbors = countOpenNeighborsFromSolid(solid, x, y);
+
+        if (solid[y][x]) {
+          const roundedConvexCorner =
+            (openLeft && openUp) ||
+            (openRight && openUp) ||
+            (openLeft && openDown) ||
+            (openRight && openDown);
+          if (roundedConvexCorner || openNeighbors >= 4) next[y][x] = false;
+        } else {
+          const narrowDiagonalNotch =
+            ((openLeft && openRight && !openUp && !openDown) ||
+              (openUp && openDown && !openLeft && !openRight)) &&
+            (openDiagonalA || openDiagonalB);
+          if (narrowDiagonalNotch && openNeighbors <= 3) next[y][x] = true;
+        }
+      }
+    }
+
+    for (let y = WATERLINE_TILE + 2; y < GRID_H - 4; y += 1) {
+      for (let x = 2; x < GRID_W - 2; x += 1) {
+        solid[y][x] = next[y][x];
+      }
+    }
+  }
+}
+
+function isOpenCaveCell(solid: boolean[][], tx: number, ty: number) {
+  return isWithinCaveBand(tx, ty) && !solid[ty]?.[tx];
+}
+
+function removeDisconnectedCaveFragments(solid: boolean[][], roots: CaveAnchor[]) {
+  const connected = new Set<string>();
+  const queue: CaveAnchor[] = [];
+
+  for (const root of roots) {
+    const start = nearestOpenCaveCell(solid, root.tx, root.ty);
+    if (!start) continue;
+    const key = tileKey(start.tx, start.ty);
+    if (connected.has(key)) continue;
+    connected.add(key);
+    queue.push(start);
+  }
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    const neighbors = [
+      { tx: current.tx + 1, ty: current.ty },
+      { tx: current.tx - 1, ty: current.ty },
+      { tx: current.tx, ty: current.ty + 1 },
+      { tx: current.tx, ty: current.ty - 1 },
+    ];
+
+    for (const next of neighbors) {
+      if (
+        next.tx <= 1 ||
+        next.tx >= GRID_W - 2 ||
+        next.ty <= WATERLINE_TILE + 1 ||
+        next.ty >= GRID_H - 2 ||
+        solid[next.ty]?.[next.tx] ||
+        !isCavePathTile(next.tx, next.ty)
+      ) {
+        continue;
+      }
+      const key = tileKey(next.tx, next.ty);
+      if (connected.has(key)) continue;
+      connected.add(key);
+      queue.push(next);
+    }
+  }
+
+  for (let ty = WATERLINE_TILE + 2; ty < GRID_H - 2; ty += 1) {
+    for (let tx = 2; tx < GRID_W - 2; tx += 1) {
+      if (!isCavePathTile(tx, ty) || solid[ty][tx]) continue;
+      if (!connected.has(tileKey(tx, ty))) solid[ty][tx] = true;
+    }
+  }
+}
+
+function nearestOpenCaveCell(solid: boolean[][], tx: number, ty: number) {
+  for (let radius = 0; radius <= 8; radius += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (Math.abs(dx) + Math.abs(dy) > radius) continue;
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (
+          nx <= 1 ||
+          nx >= GRID_W - 2 ||
+          ny <= WATERLINE_TILE + 1 ||
+          ny >= GRID_H - 2 ||
+          solid[ny]?.[nx] ||
+          !isCavePathTile(nx, ny)
+        ) {
+          continue;
+        }
+        return { tx: nx, ty: ny };
+      }
+    }
+  }
+  return null;
 }
 
 function validateCaveNetworksWithAStar(solid: boolean[][], protectedSolid?: boolean[][]) {
@@ -560,12 +1829,14 @@ function validateCaveNetworksWithAStar(solid: boolean[][], protectedSolid?: bool
 }
 
 function cavePathBounds(
-  zone: OceanZone,
+  scope: OceanZone | CaveSystemSpec,
   start: { tx: number; ty: number },
   goal: { tx: number; ty: number },
 ) {
-  const startTx = Math.max(Math.floor(zone.startX / TILE) + 3, Math.min(start.tx, goal.tx) - 18);
-  const endTx = Math.min(Math.floor(zone.endX / TILE) - 3, Math.max(start.tx, goal.tx) + 18);
+  const scopeStartTx = "mergeFamily" in scope ? caveSpecStartTx(scope) : Math.floor(scope.startX / TILE);
+  const scopeEndTx = "mergeFamily" in scope ? caveSpecEndTx(scope) : Math.floor(scope.endX / TILE);
+  const startTx = Math.max(scopeStartTx + 3, Math.min(start.tx, goal.tx) - 18);
+  const endTx = Math.min(scopeEndTx - 3, Math.max(start.tx, goal.tx) + 18);
   let minTy = Math.min(start.ty, goal.ty) - 8;
   let maxTy = Math.max(start.ty, goal.ty) + 8;
   for (let tx = startTx; tx <= endTx; tx += 4) {
@@ -862,13 +2133,13 @@ function carveCaveCircle(
 
 function carveLargeCaveMouth(solid: boolean[][], tx: number) {
   const floorTy = seafloorTileFor(tx);
-  const shaftBottom = clamp(floorTy + 13, floorTy + 8, GRID_H - 7);
-  const mouthHalfWidth = 4;
-  const shaftHalfWidth = 3;
+  const shaftBottom = clamp(floorTy + 8, floorTy + 5, GRID_H - 7);
+  const mouthHalfWidth = 5;
+  const shaftHalfWidth = 4;
 
-  for (let ty = floorTy - 3; ty <= shaftBottom; ty += 1) {
-    const entranceT = clamp((ty - (floorTy - 3)) / 8, 0, 1);
-    const halfWidth = Math.round(lerp(mouthHalfWidth + 2, shaftHalfWidth, entranceT));
+  for (let ty = floorTy - 2; ty <= shaftBottom; ty += 1) {
+    const entranceT = clamp((ty - (floorTy - 2)) / 6, 0, 1);
+    const halfWidth = Math.round(lerp(mouthHalfWidth + 1, shaftHalfWidth, entranceT));
     for (let dx = -halfWidth; dx <= halfWidth; dx += 1) {
       const x = tx + dx;
       if (x <= 1 || x >= GRID_W - 2 || ty <= WATERLINE_TILE + 1 || ty >= GRID_H - 2) continue;
@@ -876,13 +2147,68 @@ function carveLargeCaveMouth(solid: boolean[][], tx: number) {
     }
   }
 
-  for (let y = shaftBottom - 3; y <= shaftBottom + 4; y += 1) {
-    for (let x = tx - 7; x <= tx + 7; x += 1) {
+  for (let y = shaftBottom - 2; y <= shaftBottom + 3; y += 1) {
+    for (let x = tx - 8; x <= tx + 8; x += 1) {
       if (x <= 1 || x >= GRID_W - 2 || y <= WATERLINE_TILE + 1 || y >= GRID_H - 2) continue;
-      const distance = Math.hypot((x - tx) / 1.6, y - shaftBottom);
-      if (distance <= 5) solid[y][x] = false;
+      const distance = Math.hypot((x - tx) / 2.15, (y - shaftBottom) / 0.95);
+      if (distance <= 3.8) solid[y][x] = false;
     }
   }
+}
+
+function carveHorizontalLedgeCaveMouth(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  tx: number,
+) {
+  const floorTy = seafloorTileFor(tx);
+  const minMouthTy = Math.floor(depthToY(200) / TILE);
+  const mouthTy = clamp(
+    Math.max(floorTy + 4, minMouthTy),
+    WATERLINE_TILE + 7,
+    caveBottomTileFor(tx) - 5,
+  );
+  const mouthLength = 15;
+  const throatLength = 9;
+  const mouthHalfHeight = 5;
+
+  for (let step = -8; step <= mouthLength; step += 1) {
+    const x = tx + step;
+    if (x <= 1 || x >= GRID_W - 2) continue;
+    const t = clamp((step + 8) / Math.max(1, mouthLength + 8), 0, 1);
+    const localHalfHeight = Math.round(lerp(mouthHalfHeight, 3, t));
+    const centerY = Math.round(mouthTy + Math.sin(step * 0.35 + tx) * 0.9);
+
+    for (let dy = -localHalfHeight; dy <= localHalfHeight; dy += 1) {
+      const y = centerY + dy;
+      if (y <= WATERLINE_TILE + 1 || y >= GRID_H - 3) continue;
+      const edgeRound = Math.abs(dy) / Math.max(1, localHalfHeight);
+      if (edgeRound <= 1 || step < 1) {
+        solid[y][x] = false;
+        protectedSolid[y][x] = false;
+      }
+    }
+  }
+
+  for (let step = 0; step <= throatLength; step += 1) {
+    const x = tx + mouthLength + step;
+    if (x <= 1 || x >= GRID_W - 2) continue;
+    const y = clamp(
+      Math.round(mouthTy + step * 0.28 + Math.sin((tx + step) * 0.45) * 1.1),
+      seafloorTileFor(x) + 2,
+      caveBottomTileFor(x) - 3,
+    );
+    carveCaveCircle(solid, x, y, step % 3 === 0 ? 4 : 3);
+    for (let py = y - 4; py <= y + 4; py += 1) {
+      for (let px = x - 4; px <= x + 4; px += 1) {
+        if (Math.hypot(px - x, py - y) <= 4 && protectedSolid[py]?.[px] !== undefined) {
+          protectedSolid[py][px] = false;
+        }
+      }
+    }
+  }
+
+  return mouthTy;
 }
 
 function addConnectedBommies(
@@ -916,6 +2242,103 @@ function addConnectedBommies(
   );
 }
 
+function addShallowCoralCutoutLedges(
+  solid: boolean[][],
+  random: () => number,
+  protectedSolid: boolean[][],
+) {
+  const coral = ZONES[0];
+  const startTx = Math.floor((coral.startX + 1120) / TILE);
+  const endTx = Math.floor((coral.endX - 460) / TILE);
+  const count = 3;
+
+  for (let i = 0; i < count; i += 1) {
+    const section = (endTx - startTx) / count;
+    const tx = Math.floor(startTx + section * (i + 0.38 + random() * 0.26));
+    const floorTy = seafloorTileFor(tx);
+    const baseHalfWidth = 14 + Math.floor(random() * 8);
+    const halfWidth = Math.round(clamp(
+      randomNormal(random, baseHalfWidth, baseHalfWidth * 0.24),
+      baseHalfWidth * 0.72,
+      baseHalfWidth * 1.55,
+    ));
+    const coreHalfWidth = Math.max(4, Math.round(halfWidth * clamp(randomNormal(random, 0.42, 0.08), 0.28, 0.58)));
+    const shoulderHalfWidth = Math.round(clamp(
+      randomNormal(random, halfWidth * 1.6, halfWidth * 0.16),
+      halfWidth + 5,
+      halfWidth * 2.15,
+    ));
+    const maxDepth = 10 + Math.floor(random() * 9);
+
+    for (let dx = -shoulderHalfWidth; dx <= shoulderHalfWidth; dx += 1) {
+      const columnTx = tx + dx;
+      if (columnTx <= 1 || columnTx >= GRID_W - 2) continue;
+      const localFloor = seafloorTileFor(columnTx);
+      const absDx = Math.abs(dx);
+      const columnNoise = layeredNoise1D((columnTx + i * 31) * 0.17, 2, BOMMIE_TERRAIN_SEED + tx + 707) * 1.2;
+      let cutDepth: number;
+
+      if (absDx <= coreHalfWidth) {
+        const coreT = absDx / Math.max(1, coreHalfWidth);
+        cutDepth = Math.round(maxDepth - smooth01(coreT) * 2 + columnNoise);
+      } else if (absDx <= halfWidth) {
+        const wallT = (absDx - coreHalfWidth) / Math.max(1, halfWidth - coreHalfWidth);
+        cutDepth = Math.round(lerp(maxDepth - 1, 4, smooth01(wallT)) + columnNoise);
+      } else {
+        const shoulderT = (absDx - halfWidth) / Math.max(1, shoulderHalfWidth - halfWidth);
+        cutDepth = Math.round(lerp(4, 1, smooth01(shoulderT)) + columnNoise);
+      }
+
+      const carveStart = localFloor + 1;
+      const carveEnd = clamp(localFloor + Math.max(1, cutDepth), carveStart, caveBottomTileFor(columnTx) - 3);
+      for (let y = carveStart; y <= carveEnd; y += 1) {
+        solid[y][columnTx] = false;
+        protectedSolid[y][columnTx] = false;
+      }
+    }
+
+    addCoralCutoutLedge(solid, protectedSolid, tx, floorTy + 1, halfWidth, random() > 0.5 ? -1 : 1, i);
+    addCoralCutoutLedge(solid, protectedSolid, tx, floorTy + 3 + Math.floor(random() * 3), Math.round(halfWidth * 0.68), random() > 0.5 ? -1 : 1, i + 11);
+  }
+}
+
+function addCoralCutoutLedge(
+  solid: boolean[][],
+  protectedSolid: boolean[][],
+  anchorTx: number,
+  anchorTy: number,
+  halfWidth: number,
+  direction: -1 | 1,
+  variant: number,
+) {
+  const length = Math.max(9, Math.round(halfWidth * 1.15));
+  const thickness = 3 + (variant % 2);
+  const startX = anchorTx - direction * Math.max(2, Math.floor(halfWidth * 0.34));
+
+  for (let step = 0; step < length; step += 1) {
+    const x = startX + direction * step;
+    if (x <= 1 || x >= GRID_W - 2) continue;
+    const t = step / Math.max(1, length - 1);
+    const top = anchorTy + Math.round(smooth01(t) * 2) + Math.round(Math.sin(step * 0.47 + variant) * 0.8);
+    const localThickness = Math.max(2, Math.round(thickness + Math.sin(t * Math.PI) * 2 - smooth01(t)));
+    const floorLimit = seafloorTileFor(x) + 1;
+
+    for (let y = top; y < top + localThickness; y += 1) {
+      if (y <= WATERLINE_TILE + 1 || y >= GRID_H - 2 || y < floorLimit) continue;
+      solid[y][x] = true;
+      protectedSolid[y][x] = true;
+    }
+
+    if (step > length * 0.18 && step < length * 0.86 && step % 4 !== 0) {
+      const lipY = top + localThickness;
+      if (lipY > WATERLINE_TILE + 1 && lipY < GRID_H - 2) {
+        solid[lipY][x] = true;
+        protectedSolid[lipY][x] = true;
+      }
+    }
+  }
+}
+
 function addDropoffCliffOverhangs(
   solid: boolean[][],
   random: () => number,
@@ -926,7 +2349,7 @@ function addDropoffCliffOverhangs(
   const deepWidthTiles = Math.floor((deep.endX - deep.startX) / TILE);
   const dropWidthTiles = Math.floor(deepWidthTiles * 0.24);
   const anchors = [0.16, 0.35, 0.54, 0.76];
-  const protrudingLedgeIndex = 2;
+  const middleLedgeIndex = Math.floor(anchors.length / 2);
 
   for (let i = 0; i < anchors.length; i += 1) {
     const offset = Math.round(randomNormal(random, 0, 3.2));
@@ -959,19 +2382,24 @@ function addDropoffCliffOverhangs(
       i,
     );
 
-    if (i === protrudingLedgeIndex) {
+    if (i === middleLedgeIndex) {
+      const protrudeLength = Math.round(clamp(length * 1.75, length + 6, 72));
+      const protrudeThickness = Math.min(11, thickness + 4);
+      const protrudeSag = Math.round(clamp(sag * 2.5, 4, 20));
       addCliffFaceOverhang(
         solid,
         protectedSolid,
-        tx + Math.round(length * 0.36),
-        topTy + Math.round(sag * 0.3),
+        clamp(tx + Math.round(length * 0.28), deepStartTx + 4, deep.endX / TILE - 8),
+        topTy + 1,
         floorTy + 1,
-        Math.round(length * 0.9),
-        thickness + 2,
-        Math.max(2, Math.round(sag * 1.8)),
-        rootWidth,
+        protrudeLength,
+        protrudeThickness,
+        protrudeSag,
+        Math.max(2, rootWidth + 1),
         i + 45,
-        -1,
+        1,
+        true,
+        Math.max(8, Math.round(protrudeThickness * 1.9)),
       );
     }
 
@@ -1030,6 +2458,8 @@ function addCliffFaceOverhang(
   rootWidth: number,
   variant: number,
   direction: -1 | 1 = 1,
+  carveUndercut = false,
+  undercutDepth = 0,
 ) {
   const safeAnchor = clamp(anchorTx, 2, GRID_W - 3);
   const rootTop = clamp(topTy - 1, WATERLINE_TILE + 4, floorTy - 2);
@@ -1062,6 +2492,40 @@ function addCliffFaceOverhang(
       if (y <= WATERLINE_TILE + 1 || y >= GRID_H - 2 || y > maxVisibleBottom) continue;
       solid[y][x] = true;
       protectedSolid[y][x] = true;
+    }
+
+    if (carveUndercut && step > Math.round(length * 0.12) && step < Math.round(length * 0.92)) {
+      const undercutT = Math.sin(
+        ((step - length * 0.12) / (length * 0.8)) * Math.PI,
+      );
+      const carveHeight = Math.round(clamp(undercutDepth * undercutT, 3, undercutDepth));
+      const carveStart = top + localThickness;
+      const carveEnd = Math.min(maxVisibleBottom - 1, carveStart + carveHeight);
+
+      for (let y = carveStart; y <= carveEnd; y += 1) {
+        if (y <= WATERLINE_TILE + 1 || y >= GRID_H - 2) continue;
+        solid[y][x] = false;
+        protectedSolid[y][x] = false;
+      }
+      const lipInset = 2 + Math.round(undercutT * 2.3);
+      const insetY = clamp(Math.round((carveHeight * 0.75) + top + 1), WATERLINE_TILE + 2, GRID_H - 3);
+      for (let insetStep = 1; insetStep <= lipInset; insetStep += 1) {
+        const insetX = x - direction * insetStep;
+        if (insetX <= 1 || insetX >= GRID_W - 2) continue;
+        if (insetY >= 0 && insetY < GRID_H) {
+          solid[insetY][insetX] = false;
+          protectedSolid[insetY][insetX] = false;
+        }
+      }
+      const secondaryInsetY = insetY + 1;
+      for (let insetStep = 1; insetStep <= Math.max(1, lipInset - 1); insetStep += 1) {
+        const insetX = x - direction * insetStep;
+        if (insetX <= 1 || insetX >= GRID_W - 2) continue;
+        if (secondaryInsetY >= 0 && secondaryInsetY < GRID_H) {
+          solid[secondaryInsetY][insetX] = false;
+          protectedSolid[secondaryInsetY][insetX] = false;
+        }
+      }
     }
 
     if (step > length * 0.2 && step < length * 0.86 && step % 3 !== 0) {
@@ -1269,7 +2733,7 @@ function seafloorTileFor(tx: number) {
   if (cached !== undefined) return cached;
   const x = column * TILE;
   const floorY = depthToY(maxDepthAtX(x));
-  const maxFloorTile = GRID_H - depthMetersToTiles(CAVE_VERTICAL_EXTENT_METERS) - 6;
+  const maxFloorTile = GRID_H - 12;
   const floorTile = Math.round(clamp(floorY / TILE, WATERLINE_TILE + 2, maxFloorTile));
   seafloorTileCache[column] = floorTile;
   return floorTile;
@@ -1279,17 +2743,29 @@ function caveBottomTileFor(tx: number) {
   const column = Math.round(clamp(tx, 0, GRID_W - 1));
   const cached = caveBottomTileCache[column];
   if (cached !== undefined) return cached;
-  const bottomTile = clamp(
-    seafloorTileFor(column) + depthMetersToTiles(CAVE_VERTICAL_EXTENT_METERS),
-    WATERLINE_TILE + 5,
-    GRID_H - 6,
-  );
+  const floorTile = seafloorTileFor(column);
+  const bottomTile = clamp(GRID_H - 6, floorTile + 5, GRID_H - 6);
   caveBottomTileCache[column] = bottomTile;
   return bottomTile;
 }
 
+function fullCaveBottomTileFor(tx: number) {
+  const column = Math.round(clamp(tx, 0, GRID_W - 1));
+  const cached = fullCaveBottomTileCache[column];
+  if (cached !== undefined) return cached;
+  const floorTile = seafloorTileFor(column);
+  const bottomTile = clamp(GRID_H - 6, floorTile + 5, GRID_H - 6);
+  fullCaveBottomTileCache[column] = bottomTile;
+  return bottomTile;
+}
+
+function caveBottomTileForSpec(spec: CaveSystemSpec, tx: number) {
+  void spec;
+  return fullCaveBottomTileFor(tx);
+}
+
 function isWithinCaveBand(tx: number, ty: number) {
-  return ty >= seafloorTileFor(tx) + 2 && ty <= caveBottomTileFor(tx);
+  return ty >= seafloorTileFor(tx) + 2 && ty <= fullCaveBottomTileFor(tx);
 }
 
 function isCavePathTile(tx: number, ty: number) {
@@ -1297,7 +2773,7 @@ function isCavePathTile(tx: number, ty: number) {
     tx > 1 &&
     tx < GRID_W - 2 &&
     ty >= seafloorTileFor(tx) + 2 &&
-    ty <= caveBottomTileFor(tx) + 2
+    ty <= fullCaveBottomTileFor(tx) + 2
   );
 }
 

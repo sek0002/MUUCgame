@@ -1,31 +1,33 @@
+export const assetUrl = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+
 export const CREATURES = {
   hero: {
     key: "port-jackson",
-    url: "/assets/creatures/port jackson.svg",
+    url: assetUrl("/assets/creatures/port jackson.svg"),
   },
   blueDevil: {
     key: "blue-devil",
-    url: "/assets/creatures/blue devil.svg",
+    url: assetUrl("/assets/creatures/blue devil.svg"),
   },
   crayfish: {
     key: "crayfish",
-    url: "/assets/creatures/crayfish.svg",
+    url: assetUrl("/assets/creatures/crayfish.svg"),
   },
   muuc: {
     key: "muuc",
-    url: "/assets/creatures/muuc.svg",
+    url: assetUrl("/assets/creatures/muuc.svg"),
   },
   nudhhi: {
     key: "nudhhi",
-    url: "/assets/creatures/nudhhi.svg",
+    url: assetUrl("/assets/creatures/nudhhi.svg"),
   },
   seadragon: {
     key: "seadragon",
-    url: "/assets/creatures/seadragon.svg",
+    url: assetUrl("/assets/creatures/seadragon.svg"),
   },
   stingray: {
     key: "smooth-sting-ray",
-    url: "/assets/creatures/smooth sting ray.svg",
+    url: assetUrl("/assets/creatures/smooth sting ray.svg"),
   },
 } as const;
 

@@ -238,6 +238,25 @@ canvas {
   accent-color: #49d4d0;
 }
 
+.dev-seed {
+  display: grid;
+  grid-template-columns: auto 82px;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #97d8cd;
+}
+
+.dev-seed input {
+  width: 82px;
+  min-width: 0;
+  border: 1px solid rgba(155, 228, 219, 0.34);
+  background: rgba(2, 12, 18, 0.68);
+  color: #d8fff6;
+  font: inherit;
+  font-size: 11px;
+}
+
 #dev-camera-readout {
   min-width: 128px;
   padding: 4px 6px;

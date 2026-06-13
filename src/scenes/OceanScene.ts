@@ -1,10 +1,12 @@
 import Phaser from "phaser";
-import { CREATURES, NPC_CREATURES } from "../assets/manifest";
+import { CREATURES, NPC_CREATURES, assetUrl } from "../assets/manifest";
 import {
   Decoration,
   CreatureKey,
   OceanZone,
   BEACH_END_X,
+  CAVE_ZONE,
+  DEFAULT_CAVE_SEED,
   TILE,
   WATERLINE_Y,
   WORLD_HEIGHT,
@@ -14,6 +16,7 @@ import {
   generateWorld,
   maxDepthAtX,
   seafloorYAtX,
+  tileKey,
   zoneAtPosition,
 } from "../sim/world";
 
@@ -27,6 +30,9 @@ type DevCameraTools = {
   player: HTMLButtonElement;
   xRange: HTMLInputElement;
   yRange: HTMLInputElement;
+  seedInput: HTMLInputElement;
+  seedApply: HTMLButtonElement;
+  seedRandom: HTMLButtonElement;
   readout: HTMLOutputElement;
 };
 
@@ -51,6 +57,8 @@ export class OceanScene extends Phaser.Scene {
   private depthGaugeMax?: HTMLElement | null;
   private depthMarker?: HTMLElement | null;
   private lightingOverlay!: Phaser.GameObjects.Graphics;
+  private caveTileLayer?: Phaser.GameObjects.Graphics;
+  private caveBiomeCurtain?: Phaser.GameObjects.Rectangle;
   private skyClouds: Array<{ container: Phaser.GameObjects.Container; speed: number; width: number }> = [];
   private currentZoneId = "";
   private heroDirectionX: -1 | 1 = 1;
@@ -59,6 +67,8 @@ export class OceanScene extends Phaser.Scene {
   private devCameraTools?: DevCameraTools;
   private devCameraEnabled = false;
   private devCameraDragging = false;
+  private caveSeed = DEFAULT_CAVE_SEED;
+  private caveTiles = new Set<string>();
   private devCameraDragStart?: {
     pointerX: number;
     pointerY: number;
@@ -70,6 +80,11 @@ export class OceanScene extends Phaser.Scene {
     super("OceanScene");
   }
 
+  init(data: { caveSeed?: number }) {
+    const seed = Number(data?.caveSeed);
+    this.caveSeed = Number.isFinite(seed) ? Math.max(0, Math.floor(seed)) : DEFAULT_CAVE_SEED;
+  }
+
   preload() {
     this.load.svg(CREATURES.hero.key, CREATURES.hero.url, {
       width: 128,
@@ -79,12 +94,13 @@ export class OceanScene extends Phaser.Scene {
     for (const creature of NPC_CREATURES) {
       this.load.svg(creature.key, creature.url, { width: 96, height: 96 });
     }
-    this.load.image("shipwreck", "/assets/landscape/shipwreck.png");
-    this.load.image("beach-house-only", "/assets/landscape/beach-house-only.png");
+    this.load.image("shipwreck", assetUrl("/assets/landscape/shipwreck.png"));
+    this.load.image("beach-house-only", assetUrl("/assets/landscape/beach-house-only.png"));
   }
 
   create() {
-    const world = generateWorld();
+    const world = generateWorld(this.caveSeed);
+    this.caveTiles = world.caveTiles;
     this.zoneLabel = document.getElementById("zone-label");
     this.depthLabel = document.getElementById("depth-label");
     this.depthGaugeFill = document.getElementById("depth-gauge-fill");
@@ -97,7 +113,7 @@ export class OceanScene extends Phaser.Scene {
     this.createBackground(world.zones);
     this.createBeach();
     this.createWaterSurface();
-    this.createRocks(world.rocks);
+    this.createRocks(world.rocks, world.caveTiles);
     this.createDecorations(world.decorations);
     this.createCreatures(world.creatures);
     this.createDeepShipwreck();
@@ -118,6 +134,7 @@ export class OceanScene extends Phaser.Scene {
     this.updateSurfacePhysics(time);
     this.updateHeroPresentation();
     this.updateParallax(delta);
+    this.updateCaveVisibility();
     this.updateHud();
     this.updateLighting();
   }
@@ -290,15 +307,15 @@ export class OceanScene extends Phaser.Scene {
 
   private depthRockColorAtY(y: number) {
     const t = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
-    if (t < 0.45) return this.mixHexColor(0xc0915b, 0x805333, t / 0.45);
-    return this.mixHexColor(0x805333, 0x36231c, (t - 0.45) / 0.55);
+    if (t < 0.45) return this.mixHexColor(0xd4b06e, 0x9a7b52, t / 0.45);
+    return this.mixHexColor(0x9a7b52, 0x3d3428, (t - 0.45) / 0.55);
   }
 
   private terrainFillColorAtY(y: number) {
     const t = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
-    if (t < 0.38) return this.mixHexColor(0xbc8754, 0x7c5234, t / 0.38);
-    if (t < 0.74) return this.mixHexColor(0x7c5234, 0x553628, (t - 0.38) / 0.36);
-    return this.mixHexColor(0x553628, 0x2f201b, (t - 0.74) / 0.26);
+    if (t < 0.38) return this.mixHexColor(0xd9bc78, 0xa88a5a, t / 0.38);
+    if (t < 0.74) return this.mixHexColor(0xa88a5a, 0x6f6048, (t - 0.38) / 0.36);
+    return this.mixHexColor(0x6f6048, 0x332d25, (t - 0.74) / 0.26);
   }
 
   private smooth01(value: number) {
@@ -699,11 +716,11 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private createRocks(rocks: { x: number; y: number; zoneId: string; variant: number }[]) {
+  private createRocks(rocks: { x: number; y: number; zoneId: string; variant: number }[], caveTiles: Set<string>) {
     this.rocks = this.physics.add.staticGroup();
     this.createBeachCollision();
     const visibleRocks = rocks.filter((rock) => rock.x >= BEACH_END_X + 360);
-    this.createRockVisuals(visibleRocks);
+    this.createRockVisuals(visibleRocks, caveTiles);
 
     for (const run of this.collectRockRuns(visibleRocks)) {
       const width = (run.endTx - run.startTx + 1) * TILE;
@@ -715,9 +732,76 @@ export class OceanScene extends Phaser.Scene {
     this.rocks.refresh();
   }
 
-  private createRockVisuals(rocks: { x: number; y: number; zoneId: string; variant: number }[]) {
+  private createRockVisuals(rocks: { x: number; y: number; zoneId: string; variant: number }[], caveTiles: Set<string>) {
     const terrainSkin = this.add.graphics().setDepth(-5.5);
     this.drawSmoothTerrainSkin(terrainSkin, rocks);
+    const surfaceRocks = this.add.graphics().setDepth(-5.25);
+    this.drawSurfaceRockDecorations(surfaceRocks, rocks);
+    this.caveBiomeCurtain = this.add
+      .rectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 0x02070c, 0.82)
+      .setOrigin(0)
+      .setDepth(-4.75)
+      .setVisible(false);
+    this.drawCaveTileOverlay(caveTiles);
+  }
+
+  private drawCaveTileOverlay(caveTiles: Set<string>) {
+    if (caveTiles.size === 0) return;
+    const caveLayer = this.add.graphics().setDepth(-4.6);
+    this.caveTileLayer = caveLayer;
+    caveLayer.setVisible(false);
+    const rows = new Map<number, number[]>();
+
+    for (const key of caveTiles) {
+      const [tx, ty] = key.split(",").map(Number);
+      if (tx * TILE < BEACH_END_X + 360) continue;
+      const row = rows.get(ty) ?? [];
+      row.push(tx);
+      rows.set(ty, row);
+    }
+
+    for (const [ty, row] of rows) {
+      row.sort((a, b) => a - b);
+      let startTx = row[0];
+      let endTx = startTx;
+
+      for (let i = 1; i <= row.length; i += 1) {
+        const tx = row[i];
+        if (tx === endTx + 1) {
+          endTx = tx;
+          continue;
+        }
+
+        this.drawCaveTileRun(caveLayer, startTx, endTx, ty, caveTiles);
+        startTx = tx;
+        endTx = tx;
+      }
+    }
+  }
+
+  private drawCaveTileRun(
+    graphics: Phaser.GameObjects.Graphics,
+    startTx: number,
+    endTx: number,
+    ty: number,
+    caveTiles: Set<string>,
+  ) {
+    if (startTx === undefined || endTx === undefined) return;
+    const x = startTx * TILE;
+    const y = ty * TILE;
+    const width = (endTx - startTx + 1) * TILE;
+    const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const fill = this.mixHexColor(0x778080, 0x4f5654, depthT);
+
+    graphics.fillStyle(fill, 1);
+    graphics.fillRect(x, y, width, TILE);
+  }
+
+  private hasCaveTileRun(caveTiles: Set<string>, startTx: number, endTx: number, ty: number) {
+    for (let tx = startTx; tx <= endTx; tx += 1) {
+      if (caveTiles.has(tileKey(tx, ty))) return true;
+    }
+    return false;
   }
 
   private collectRockRuns(rocks: { x: number; y: number; variant: number }[]) {
@@ -842,7 +926,7 @@ export class OceanScene extends Phaser.Scene {
 
     for (let y = WATERLINE_Y + 320; y < WORLD_HEIGHT; y += 720) {
       const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
-      const color = this.mixHexColor(0xb1885e, 0x3d3230, depthT);
+      const color = this.mixHexColor(0xd1ad6d, 0x4a4132, depthT);
       graphics.fillStyle(color, 0.014);
       graphics.fillRect(startX, y + Math.sin(y * 0.01) * 6, endX - startX, 2);
     }
@@ -977,6 +1061,105 @@ export class OceanScene extends Phaser.Scene {
         graphics.strokePath();
       }
     }
+  }
+
+  private drawSurfaceRockDecorations(
+    graphics: Phaser.GameObjects.Graphics,
+    rocks: { x: number; y: number; variant: number }[],
+  ) {
+    const rockSet = new Set(rocks.map((rock) => `${rock.x / TILE},${rock.y / TILE}`));
+    const surfaceCandidates = rocks.filter((rock) => {
+      const tx = rock.x / TILE;
+      const ty = rock.y / TILE;
+      const centerX = rock.x + TILE / 2;
+      const zone = zoneAtPosition(centerX, rock.y + TILE / 2);
+      const allowedZone = zone.id === "coral" || zone.id === "surface";
+      const nearWorldFloor = rock.y <= seafloorYAtX(centerX) + TILE * 1.65;
+      const exposedTop = !rockSet.has(`${tx},${ty - 1}`);
+      const boundaryClear = this.hasSurfaceRockClearance(rockSet, tx, ty);
+      const densityWave = (Math.sin(centerX * 0.0017) + Math.sin(centerX * 0.00043 + 1.8)) * 0.5;
+      const localDensity = Phaser.Math.Clamp(0.075 + densityWave * 0.045, 0.025, 0.16);
+      return allowedZone && exposedTop && nearWorldFloor && boundaryClear && this.deterministicUnit(tx, ty, rock.variant) < localDensity;
+    });
+
+    for (const rock of surfaceCandidates) {
+      const tx = rock.x / TILE;
+      const ty = rock.y / TILE;
+      const sizeRoll = this.deterministicUnit(tx + 17, ty + 29, rock.variant + 5);
+      const unit = sizeRoll > 0.78 ? 4 : 3;
+      const radiusX = 3 + Math.floor(this.deterministicUnit(tx + 3, ty + 7, rock.variant) * 4);
+      const radiusY = Phaser.Math.Clamp(
+        Math.round(radiusX * Phaser.Math.Linear(0.5, 0.72, sizeRoll)),
+        2,
+        4,
+      );
+      const x = rock.x + TILE / 2 + Math.sin(tx * 0.9) * 5;
+      const y = rock.y + TILE * 0.62;
+      this.drawPixelSurfaceRock(graphics, x, y, unit, radiusX, radiusY, rock.variant);
+    }
+  }
+
+  private hasSurfaceRockClearance(rockSet: Set<string>, tx: number, ty: number) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      if (!rockSet.has(`${tx + dx},${ty}`)) return false;
+      if (rockSet.has(`${tx + dx},${ty - 1}`)) return false;
+    }
+
+    for (let dy = 0; dy <= 2; dy += 1) {
+      if (!rockSet.has(`${tx - 3},${ty + dy}`) || !rockSet.has(`${tx + 3},${ty + dy}`)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private drawPixelSurfaceRock(
+    graphics: Phaser.GameObjects.Graphics,
+    centerX: number,
+    centerY: number,
+    unit: number,
+    radiusX: number,
+    radiusY: number,
+    variant: number,
+  ) {
+    const palette = this.surfaceRockPalette(variant);
+    const dark = palette.dark;
+    const mid = palette.mid;
+    const light = palette.light;
+
+    for (let py = -radiusY; py <= radiusY; py += 1) {
+      for (let px = -radiusX; px <= radiusX; px += 1) {
+        const wobble = 1 + Math.sin((px + variant) * 1.7) * 0.08 + Math.sin((py - variant) * 1.2) * 0.06;
+        const distance = Math.hypot(px / Math.max(1, radiusX), py / Math.max(1, radiusY));
+        if (distance > wobble) continue;
+
+        const topLight = py < -radiusY * 0.38 && px < radiusX * 0.35;
+        const bottomShade = py > radiusY * 0.35 || px > radiusX * 0.48;
+        const color = topLight ? light : bottomShade ? dark : mid;
+        const x = centerX + px * unit;
+        const y = centerY + py * unit;
+        graphics.fillStyle(color, 0.94);
+        graphics.fillRect(x, y, unit, unit);
+      }
+    }
+  }
+
+  private surfaceRockPalette(variant: number) {
+    const palettes = [
+      { light: 0xa7a98c, mid: 0x939579, dark: 0x7d8068 },
+      { light: 0xb1c7d2, mid: 0x9ab4c3, dark: 0x7890a2 },
+      { light: 0x8ca7b8, mid: 0x7894a7, dark: 0x657d8f },
+      { light: 0xa3a585, mid: 0x8f9273, dark: 0x74775f },
+      { light: 0x76585d, mid: 0x684c52, dark: 0x553d45 },
+      { light: 0x735459, mid: 0x63484d, dark: 0x513a40 },
+    ];
+    return palettes[Math.abs(variant) % palettes.length];
+  }
+
+  private deterministicUnit(a: number, b: number, c: number) {
+    const value = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453;
+    return value - Math.floor(value);
   }
 
   private rockJitter(tx: number, ty: number, phase: number) {
@@ -1376,6 +1559,9 @@ export class OceanScene extends Phaser.Scene {
     const player = document.getElementById("dev-player");
     const xRange = document.getElementById("dev-x-range");
     const yRange = document.getElementById("dev-y-range");
+    const seedInput = document.getElementById("cave-seed-input");
+    const seedApply = document.getElementById("cave-seed-apply");
+    const seedRandom = document.getElementById("cave-seed-random");
     const readout = document.getElementById("dev-camera-readout");
 
     if (
@@ -1387,6 +1573,9 @@ export class OceanScene extends Phaser.Scene {
       !(player instanceof HTMLButtonElement) ||
       !(xRange instanceof HTMLInputElement) ||
       !(yRange instanceof HTMLInputElement) ||
+      !(seedInput instanceof HTMLInputElement) ||
+      !(seedApply instanceof HTMLButtonElement) ||
+      !(seedRandom instanceof HTMLButtonElement) ||
       !(readout instanceof HTMLOutputElement)
     ) {
       return;
@@ -1394,30 +1583,37 @@ export class OceanScene extends Phaser.Scene {
 
     xRange.max = String(WORLD_WIDTH);
     yRange.max = String(WORLD_HEIGHT);
-    this.devCameraTools = { root, toggle, zoomIn, zoomOut, fit, player, xRange, yRange, readout };
+    seedInput.value = String(this.caveSeed);
+    this.devCameraTools = { root, toggle, zoomIn, zoomOut, fit, player, xRange, yRange, seedInput, seedApply, seedRandom, readout };
 
-    toggle.addEventListener("click", () => this.setDeveloperCameraEnabled(!this.devCameraEnabled));
-    zoomIn.addEventListener("click", () => {
+    toggle.onclick = () => this.setDeveloperCameraEnabled(!this.devCameraEnabled);
+    zoomIn.onclick = () => {
       this.setDeveloperCameraEnabled(true);
       this.zoomDeveloperCamera(1.25);
-    });
-    zoomOut.addEventListener("click", () => {
+    };
+    zoomOut.onclick = () => {
       this.setDeveloperCameraEnabled(true);
       this.zoomDeveloperCamera(0.8);
-    });
-    fit.addEventListener("click", () => {
+    };
+    fit.onclick = () => {
       this.setDeveloperCameraEnabled(true);
       this.fitDeveloperCameraToWorld();
-    });
-    player.addEventListener("click", () => this.setDeveloperCameraEnabled(false));
-    xRange.addEventListener("input", () => {
+    };
+    player.onclick = () => this.setDeveloperCameraEnabled(false);
+    xRange.oninput = () => {
       this.setDeveloperCameraEnabled(true);
       this.centerDeveloperCamera(Number(xRange.value), this.getDeveloperCameraCenter().y);
-    });
-    yRange.addEventListener("input", () => {
+    };
+    yRange.oninput = () => {
       this.setDeveloperCameraEnabled(true);
       this.centerDeveloperCamera(this.getDeveloperCameraCenter().x, Number(yRange.value));
-    });
+    };
+    seedApply.onclick = () => this.restartWithCaveSeed(Number(seedInput.value));
+    seedRandom.onclick = () => {
+      const seed = Math.floor(Math.random() * 999999999);
+      seedInput.value = String(seed);
+      this.restartWithCaveSeed(seed);
+    };
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (!this.devCameraEnabled || !pointer.leftButtonDown()) return;
@@ -1486,6 +1682,11 @@ export class OceanScene extends Phaser.Scene {
     this.updateDeveloperToolReadout();
   }
 
+  private restartWithCaveSeed(seed: number) {
+    const nextSeed = Number.isFinite(seed) ? Math.max(0, Math.floor(seed)) : DEFAULT_CAVE_SEED;
+    this.scene.restart({ caveSeed: nextSeed });
+  }
+
   private updateDeveloperCamera(delta: number) {
     if (!this.devCameraEnabled) {
       this.updateDeveloperToolReadout();
@@ -1516,6 +1717,7 @@ export class OceanScene extends Phaser.Scene {
     if (!this.devCameraTools) return;
     this.devCameraTools.root.classList.toggle("is-active", this.devCameraEnabled);
     this.devCameraTools.toggle.setAttribute("aria-pressed", String(this.devCameraEnabled));
+    this.updateCaveVisibility();
   }
 
   private updateDeveloperToolReadout() {
@@ -1709,6 +1911,7 @@ export class OceanScene extends Phaser.Scene {
     if (this.devCameraEnabled) return;
 
     const depth = depthAtPosition(this.hero.x, this.hero.y);
+    const inCave = this.isHeroInCave();
     const dimFactor = Phaser.Math.Clamp((depth - 50) / 150, 0, 1);
     const blackoutFactor = Phaser.Math.Clamp((depth - 200) / 100, 0, 1);
     const camera = this.cameras.main;
@@ -1716,9 +1919,9 @@ export class OceanScene extends Phaser.Scene {
     const height = camera.height;
 
     const colorWashAlpha = Phaser.Math.Linear(0, 0.34, dimFactor);
-    const ambientDarkAlpha = Phaser.Math.Linear(0, 0.38, dimFactor) + blackoutFactor * 0.57;
+    const ambientDarkAlpha = Phaser.Math.Linear(0, 0.38, dimFactor) + blackoutFactor * 0.57 + (inCave ? 0.14 : 0);
 
-    if (depth <= 50) return;
+    if (depth <= 50 && !inCave) return;
 
     this.lightingOverlay.fillStyle(0x1b3447, colorWashAlpha);
     this.lightingOverlay.fillRect(0, 0, width, height);
@@ -1731,7 +1934,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private updateHud() {
-    const zone = zoneAtPosition(this.hero.x, this.hero.y);
+    const zone = this.isHeroInCave() ? CAVE_ZONE : zoneAtPosition(this.hero.x, this.hero.y);
     if (zone.id !== this.currentZoneId) {
       this.currentZoneId = zone.id;
       if (this.zoneLabel) this.zoneLabel.textContent = zone.name;
@@ -1750,5 +1953,22 @@ export class OceanScene extends Phaser.Scene {
         this.depthGaugeMax.textContent = `${DEPTH_GAUGE_MAX}m`;
       }
     }
+  }
+
+  private updateCaveVisibility() {
+    const inCave = this.isHeroInCave();
+    if (this.caveTileLayer) {
+      this.caveTileLayer.setVisible(this.devCameraEnabled || inCave);
+      this.caveTileLayer.setAlpha(this.devCameraEnabled && !inCave ? 0.74 : 0.95);
+    }
+    if (this.caveBiomeCurtain) {
+      this.caveBiomeCurtain.setVisible(inCave && !this.devCameraEnabled);
+    }
+  }
+
+  private isHeroInCave() {
+    const tx = Math.floor(this.hero.x / TILE);
+    const ty = Math.floor(this.hero.y / TILE);
+    return this.caveTiles.has(tileKey(tx, ty));
   }
 }
