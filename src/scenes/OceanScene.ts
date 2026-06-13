@@ -48,7 +48,6 @@ const DEPTH_GAUGE_MAX = WORLD_MAX_DEPTH_METERS;
 
 export class OceanScene extends Phaser.Scene {
   private hero!: Phaser.Physics.Arcade.Sprite;
-  private heroTail!: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeySet;
   private rocks!: Phaser.Physics.Arcade.StaticGroup;
@@ -136,7 +135,7 @@ export class OceanScene extends Phaser.Scene {
     this.updateDeveloperCamera(delta);
     this.handleInput();
     this.updateSurfacePhysics(time);
-    this.updateHeroPresentation(time);
+    this.updateHeroPresentation();
     this.updateParallax(delta);
     this.updateCaveVisibility();
     this.updateHud();
@@ -1549,15 +1548,6 @@ export class OceanScene extends Phaser.Scene {
 
     this.hero.body?.setSize(92, 36, true);
     this.faceSprite(this.hero, "port-jackson", this.heroDirectionX);
-
-    this.heroTail = this.add
-      .image(this.hero.x, this.hero.y, CREATURES.hero.key)
-      .setCrop(84, 0, 44, 64)
-      .setOrigin(0.16, 0.52)
-      .setScale(0.72)
-      .setDepth(21)
-      .setAlpha(0.98);
-    this.faceSprite(this.heroTail, "port-jackson", this.heroDirectionX);
   }
 
   private createControls() {
@@ -1904,30 +1894,15 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private updateHeroPresentation(time: number) {
+  private updateHeroPresentation() {
     const body = this.hero.body as Phaser.Physics.Arcade.Body;
     if (Math.abs(body.velocity.x) > 12) {
       this.heroDirectionX = body.velocity.x > 0 ? 1 : -1;
       this.faceSprite(this.hero, "port-jackson", this.heroDirectionX);
-      this.faceSprite(this.heroTail, "port-jackson", this.heroDirectionX);
     }
 
     const verticalPitch = Phaser.Math.Clamp(body.velocity.y / 760, -0.32, 0.32);
     this.hero.setRotation(verticalPitch * this.heroDirectionX);
-
-    const swimSpeed = Phaser.Math.Clamp(Math.abs(body.velocity.x) / 260 + Math.abs(body.velocity.y) / 520, 0.35, 1.45);
-    const tailSwing = Math.sin(time * 0.013 * swimSpeed) * 0.2 * swimSpeed;
-    const tailBaseOffset = this.heroDirectionX * 28 * this.hero.scaleX;
-    const tailLiftOffset = 1 * this.hero.scaleY;
-    const cos = Math.cos(this.hero.rotation);
-    const sin = Math.sin(this.hero.rotation);
-
-    this.heroTail
-      .setOrigin(this.heroDirectionX > 0 ? 0.84 : 0.16, 0.52)
-      .setPosition(this.hero.x + tailBaseOffset * cos - tailLiftOffset * sin, this.hero.y + tailBaseOffset * sin + tailLiftOffset * cos)
-      .setRotation(this.hero.rotation - tailSwing * this.heroDirectionX)
-      .setVisible(this.hero.visible)
-      .setAlpha(this.hero.alpha);
   }
 
   private updateParallax(delta: number) {
