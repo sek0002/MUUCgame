@@ -117,6 +117,7 @@ const FINAL_BIOME_BACKGROUND_EDGE_PADDING = 12;
 const FINAL_BIOME_BACKGROUND_SCROLL_DRIFT_Y = 0.05;
 const FINAL_BIOME_BACKGROUND_RESPONSE = 0.1;
 const FINAL_BIOME_BACKGROUND_SCALE = 0.42;
+const FINAL_BIOME_BACKGROUND_RENDER_HEIGHT = 2048;
 const FINAL_BIOME_BACKGROUND_KEY = "final-background-combined";
 const FINAL_BIOME_BACKGROUND_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix.png";
 const FINAL_BIOME_SEAGRASS_IMAGE_END = 0.25;
@@ -233,6 +234,8 @@ const SAND_PALETTE_DARK = 0x3a2316;
 const TERRAIN_GRADIENT_TEXTURE_KEY = "terrain-sand-gradient-scale";
 const TERRAIN_GRADIENT_TEXTURE_WIDTH = 1200;
 const TERRAIN_GRADIENT_TEXTURE_HEIGHT = 720;
+const MIN_LOADING_SCREEN_MS = 1400;
+const READY_LOADING_HOLD_MS = 700;
 type SeagrassFrameSet = (typeof SEAGRASS_MEADOW_VARIANTS)[number]["frames"];
 
 export class OceanScene extends Phaser.Scene {
@@ -293,6 +296,7 @@ export class OceanScene extends Phaser.Scene {
   private devCameraDragging = false;
   private caveSeed = DEFAULT_CAVE_SEED;
   private caveTiles = new Set<string>();
+  private loadingScreenStartedAt = 0;
   private devCameraDragStart?: {
     pointerX: number;
     pointerY: number;
@@ -319,6 +323,11 @@ export class OceanScene extends Phaser.Scene {
   }
 
   preload() {
+    this.loadingScreenStartedAt = performance.now();
+    this.updateLoadingScreen(0);
+    this.load.on("progress", (value: number) => this.updateLoadingScreen(value));
+    this.load.once("complete", () => this.updateLoadingScreen(1));
+
     this.load.image(CREATURES.hero.frames.center.key, CREATURES.hero.frames.center.url);
     this.load.image(CREATURES.hero.frames.tailRight.key, CREATURES.hero.frames.tailRight.url);
     this.load.image(CREATURES.hero.frames.tailLeft.key, CREATURES.hero.frames.tailLeft.url);
@@ -400,6 +409,36 @@ export class OceanScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.hero, true, 0.055, 0.055);
     this.cameras.main.setDeadzone(190, 118);
     this.cameras.main.fadeIn(450, 5, 20, 31);
+    this.hideLoadingScreen();
+  }
+
+  private updateLoadingScreen(progress: number) {
+    const splash = document.getElementById("splash");
+    const fill = document.getElementById("loading-fill");
+    const percent = document.getElementById("loading-percent");
+    const status = document.getElementById("loading-status");
+    const normalizedProgress = Phaser.Math.Clamp(progress, 0, 1);
+
+    splash?.classList.remove("is-ready");
+    if (fill instanceof HTMLElement) {
+      fill.style.width = `${Math.round(normalizedProgress * 100)}%`;
+    }
+    if (percent) {
+      percent.textContent = `${Math.round(normalizedProgress * 100)}%`;
+    }
+    if (status) {
+      status.textContent = normalizedProgress >= 1 ? "Preparing reef" : "Loading assets";
+    }
+  }
+
+  private hideLoadingScreen() {
+    this.updateLoadingScreen(1);
+    const elapsed = performance.now() - this.loadingScreenStartedAt;
+    const remainingDelay = Math.max(READY_LOADING_HOLD_MS, MIN_LOADING_SCREEN_MS - elapsed);
+
+    window.setTimeout(() => {
+      document.getElementById("splash")?.classList.add("is-ready");
+    }, remainingDelay);
   }
 
   update(time: number, delta: number) {
@@ -3682,7 +3721,8 @@ export class OceanScene extends Phaser.Scene {
 
     for (const layer of this.finalBiomeBackgrounds) {
       const texture = this.textures.get(layer.image.texture.key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
-      const scale = camera.height / texture.height;
+      const renderHeight = Math.max(FINAL_BIOME_BACKGROUND_RENDER_HEIGHT, camera.height);
+      const scale = renderHeight / texture.height;
       const displayWidth = texture.width * scale;
       const displayHeight = texture.height * scale;
       const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - FINAL_BIOME_BACKGROUND_EDGE_PADDING);

@@ -2,23 +2,6 @@ import Phaser from "phaser";
 import { OceanScene } from "./scenes/OceanScene";
 import "./styles.css";
 
-const MOBILE_RENDER_SCALE = 0.72;
-const MOBILE_VIEWPORT_QUERY = "(hover: none), (pointer: coarse), (max-width: 900px)";
-
-const getRenderScale = () =>
-  window.matchMedia(MOBILE_VIEWPORT_QUERY).matches ? MOBILE_RENDER_SCALE : 1;
-
-const getRenderSize = () => {
-  const renderScale = getRenderScale();
-
-  return {
-    width: Math.round(window.innerWidth * renderScale),
-    height: Math.round(window.innerHeight * renderScale),
-  };
-};
-
-const initialRenderSize = getRenderSize();
-
 type WebkitFullscreenDocument = Document & {
   webkitExitFullscreen?: () => Promise<void> | void;
   webkitFullscreenElement?: Element | null;
@@ -81,9 +64,9 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true,
   roundPixels: true,
   scale: {
-    mode: Phaser.Scale.FIT,
-    width: initialRenderSize.width,
-    height: initialRenderSize.height,
+    mode: Phaser.Scale.RESIZE,
+    width: window.innerWidth,
+    height: window.innerHeight,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   physics: {
@@ -96,11 +79,5 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [OceanScene],
 };
 
-const game = new Phaser.Game(config);
-
-window.addEventListener("resize", () => {
-  const nextRenderSize = getRenderSize();
-  game.scale.setGameSize(nextRenderSize.width, nextRenderSize.height);
-});
-
+new Phaser.Game(config);
 initializeFullscreenToggle();

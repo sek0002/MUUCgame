@@ -395,46 +395,82 @@ canvas {
   place-items: center;
   pointer-events: none;
   background:
-    linear-gradient(rgba(5, 19, 30, 0.48), rgba(5, 19, 30, 0.08)),
-    rgba(6, 23, 34, 0.78);
-  animation: splash-shell 1700ms cubic-bezier(0.2, 0.8, 0.18, 1) forwards;
+    linear-gradient(rgba(4, 18, 28, 0.76), rgba(3, 12, 19, 0.54)),
+    rgba(6, 23, 34, 0.92);
+  opacity: 1;
+  transition:
+    opacity 360ms ease,
+    visibility 360ms ease;
 }
 
-#splash img {
+#splash.is-ready {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#loading-panel {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(72vw, 360px);
+  color: #d8fff6;
+  text-align: center;
+  text-shadow: 0 1px 0 #021017;
+}
+
+#loading-panel img {
   width: min(46vw, 360px);
   height: auto;
   image-rendering: pixelated;
   filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.28));
-  animation: splash-logo 1700ms cubic-bezier(0.2, 0.8, 0.18, 1) forwards;
+  animation: loading-logo 1200ms ease-in-out infinite alternate;
 }
 
-@keyframes splash-logo {
-  0% {
-    transform: translate(0, 0) scale(1.3);
-    opacity: 0;
-  }
-  18% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  62% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(calc(-50vw + 52px), calc(-50vh + 52px)) scale(0.2);
-    opacity: 0;
-  }
+#loading-title {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
-@keyframes splash-shell {
-  0%,
-  68% {
-    opacity: 1;
-  }
+#loading-track {
+  width: 100%;
+  height: 12px;
+  border: 2px solid rgba(155, 228, 219, 0.48);
+  background: rgba(2, 12, 18, 0.62);
+  box-shadow:
+    inset 0 0 0 2px rgba(73, 212, 208, 0.1),
+    0 3px 0 rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+#loading-fill {
+  width: 0%;
+  height: 100%;
+  background:
+    linear-gradient(90deg, #49d4d0, #d8fff6),
+    #49d4d0;
+  transition: width 120ms linear;
+}
+
+#loading-percent {
+  min-width: 42px;
+  padding: 4px 6px;
+  border: 1px solid rgba(155, 228, 219, 0.34);
+  background: rgba(4, 20, 28, 0.64);
+  color: #97d8cd;
+  font-size: 12px;
+  line-height: 1;
+}
+
+#loading-status {
+  color: #97d8cd;
+  font-size: 11px;
+  line-height: 1;
+}
+
+@keyframes loading-logo {
   100% {
-    opacity: 0;
-    visibility: hidden;
+    transform: translateY(-4px);
   }
 }
 

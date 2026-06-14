@@ -9,7 +9,15 @@
     <div id="app">
       <div id="game-root"></div>
       <div id="splash" aria-hidden="true">
-        <img src="%BASE_URL%assets/creatures/muuc.svg" alt="" />
+        <div id="loading-panel">
+          <img src="%BASE_URL%assets/creatures/muuc.svg" alt="" />
+          <div id="loading-title">Port Jackson Reef Run</div>
+          <div id="loading-track" aria-hidden="true">
+            <div id="loading-fill"></div>
+          </div>
+          <div id="loading-status">Loading assets</div>
+          <div id="loading-percent">0%</div>
+        </div>
       </div>
       <div id="hud">
         <img id="hud-logo" src="%BASE_URL%assets/creatures/muuc.svg" alt="" />
