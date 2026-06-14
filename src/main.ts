@@ -16,6 +16,20 @@ const fullscreenDocument = document as WebkitFullscreenDocument;
 const fullscreenElement = () =>
   document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement ?? null;
 
+const RENDER_HEIGHT = 720;
+const MIN_RENDER_WIDTH = 360;
+
+const getRenderSize = () => {
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+
+  return {
+    width: Math.max(MIN_RENDER_WIDTH, Math.round(RENDER_HEIGHT * aspect)),
+    height: RENDER_HEIGHT,
+  };
+};
+
+const initialRenderSize = getRenderSize();
+
 const initializeFullscreenToggle = () => {
   const button = document.getElementById("fullscreen-toggle");
   if (!(button instanceof HTMLButtonElement)) return;
@@ -64,9 +78,9 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true,
   roundPixels: true,
   scale: {
-    mode: Phaser.Scale.RESIZE,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    mode: Phaser.Scale.FIT,
+    width: initialRenderSize.width,
+    height: initialRenderSize.height,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   physics: {
@@ -79,5 +93,11 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [OceanScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+window.addEventListener("resize", () => {
+  const nextRenderSize = getRenderSize();
+  game.scale.setGameSize(nextRenderSize.width, nextRenderSize.height);
+});
+
 initializeFullscreenToggle();

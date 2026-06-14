@@ -115,9 +115,9 @@ const FINAL_BIOME_BACKGROUND_ALPHA = 0.92;
 const FINAL_BIOME_BACKGROUND_VIEW_MARGIN = 420;
 const FINAL_BIOME_BACKGROUND_EDGE_PADDING = 12;
 const FINAL_BIOME_BACKGROUND_SCROLL_DRIFT_Y = 0.05;
-const FINAL_BIOME_BACKGROUND_RESPONSE = 0.1;
+const FINAL_BIOME_BACKGROUND_RESPONSE = 0.045;
 const FINAL_BIOME_BACKGROUND_SCALE = 0.42;
-const FINAL_BIOME_BACKGROUND_RENDER_HEIGHT = 2048;
+const FINAL_BIOME_BACKGROUND_ZOOM_OUT = 0.68;
 const FINAL_BIOME_BACKGROUND_KEY = "final-background-combined";
 const FINAL_BIOME_BACKGROUND_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix.png";
 const FINAL_BIOME_SEAGRASS_IMAGE_END = 0.25;
@@ -3721,8 +3721,11 @@ export class OceanScene extends Phaser.Scene {
 
     for (const layer of this.finalBiomeBackgrounds) {
       const texture = this.textures.get(layer.image.texture.key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
-      const renderHeight = Math.max(FINAL_BIOME_BACKGROUND_RENDER_HEIGHT, camera.height);
-      const scale = renderHeight / texture.height;
+      const coverScale = Math.max(
+        camera.height / texture.height,
+        (camera.width + FINAL_BIOME_BACKGROUND_VIEW_MARGIN * 2) / texture.width,
+      );
+      const scale = Math.max(camera.height / texture.height, coverScale * FINAL_BIOME_BACKGROUND_ZOOM_OUT);
       const displayWidth = texture.width * scale;
       const displayHeight = texture.height * scale;
       const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - FINAL_BIOME_BACKGROUND_EDGE_PADDING);
