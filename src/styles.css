@@ -202,6 +202,43 @@ canvas {
   display: block;
 }
 
+#fullscreen-toggle {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 24;
+  display: none;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgba(155, 228, 219, 0.48);
+  background: rgba(4, 20, 28, 0.78);
+  color: #d8fff6;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 0 1px 0 #021017;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#fullscreen-toggle:hover,
+#fullscreen-toggle:focus-visible {
+  background: rgba(12, 64, 77, 0.86);
+  outline: none;
+}
+
+#fullscreen-toggle[aria-pressed="true"] {
+  background: rgba(19, 123, 121, 0.9);
+  border-color: rgba(216, 255, 246, 0.74);
+}
+
+#fullscreen-toggle[hidden] {
+  display: none;
+}
+
 #touch-joystick-ring,
 #touch-joystick-knob {
   position: absolute;
@@ -491,6 +528,12 @@ canvas {
 
   #dev-tools {
     bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  #fullscreen-toggle {
+    display: grid;
   }
 }
 
