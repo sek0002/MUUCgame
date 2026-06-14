@@ -29,6 +29,12 @@
           <span id="depth-gauge-max">500m</span>
         </div>
       </div>
+      <div id="touch-controls" aria-label="Touch joystick">
+        <div id="touch-joystick" aria-hidden="true">
+          <div id="touch-joystick-ring"></div>
+          <div id="touch-joystick-knob"></div>
+        </div>
+      </div>
       <div id="dev-tools" aria-label="Developer world navigation">
         <button id="dev-toggle" type="button" aria-pressed="false" title="Developer camera">DEV</button>
         <div class="dev-extra">
@@ -36,6 +42,7 @@
           <button id="dev-zoom-in" type="button" title="Zoom in">+</button>
           <button id="dev-fit" type="button" title="Fit world">[]</button>
           <button id="dev-player" type="button" title="Follow player">@</button>
+          <button id="dev-teleport" type="button" title="Teleport player to dev view center">TP</button>
           <label class="dev-slider" title="World X">
             <span>X</span>
             <input id="dev-x-range" type="range" min="0" max="50000" value="0" />

@@ -171,30 +171,104 @@ canvas {
   bottom: 0;
 }
 
+#touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: none;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+#touch-controls.dev-nav {
+  display: block;
+  cursor: grab;
+}
+
+#touch-joystick {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 122px;
+  height: 122px;
+  display: none;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.24));
+}
+
+#touch-controls.is-active #touch-joystick {
+  display: block;
+}
+
+#touch-joystick-ring,
+#touch-joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#touch-joystick-ring {
+  width: 122px;
+  height: 122px;
+  border: 2px solid rgba(216, 255, 246, 0.44);
+  background:
+    radial-gradient(circle, rgba(73, 212, 208, 0.16), rgba(4, 20, 28, 0.52) 62%, rgba(4, 20, 28, 0.2)),
+    rgba(4, 20, 28, 0.32);
+  box-shadow:
+    inset 0 0 0 2px rgba(73, 212, 208, 0.14),
+    0 0 18px rgba(73, 212, 208, 0.14);
+}
+
+#touch-joystick-knob {
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(216, 255, 246, 0.58);
+  background:
+    radial-gradient(circle at 38% 32%, rgba(216, 255, 246, 0.66), rgba(73, 212, 208, 0.54) 36%, rgba(14, 84, 96, 0.74)),
+    rgba(19, 123, 121, 0.78);
+  box-shadow:
+    inset 0 -5px 0 rgba(0, 0, 0, 0.18),
+    0 3px 0 rgba(0, 0, 0, 0.28);
+}
+
 #dev-tools {
   position: fixed;
   left: 14px;
+  right: 14px;
   bottom: 14px;
   z-index: 20;
   display: flex;
   align-items: center;
   gap: 7px;
+  width: fit-content;
+  max-width: calc(100vw - 28px);
   color: #d8fff6;
   text-shadow: 0 1px 0 #021017;
+  --dev-control-height: clamp(24px, 3.1vw, 28px);
+  --dev-font-size: clamp(9px, 1.05vw, 11px);
+  --dev-gap: clamp(4px, 0.75vw, 7px);
+  --dev-pad-x: clamp(5px, 0.9vw, 8px);
+  --dev-slider-width: clamp(76px, 11vw, 112px);
+  --dev-seed-width: clamp(64px, 8vw, 82px);
+  --dev-readout-width: clamp(132px, 17vw, 184px);
 }
 
 #dev-tools button {
   display: grid;
   place-items: center;
-  min-width: 32px;
-  height: 28px;
-  padding: 0 8px;
+  min-width: var(--dev-control-height);
+  height: var(--dev-control-height);
+  padding: 0 var(--dev-pad-x);
   border: 1px solid rgba(155, 228, 219, 0.4);
   background: rgba(4, 20, 28, 0.78);
   color: #d8fff6;
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--dev-font-size);
   line-height: 1;
   cursor: pointer;
 }
@@ -213,8 +287,9 @@ canvas {
 .dev-extra {
   display: none;
   align-items: center;
-  gap: 7px;
-  padding: 6px;
+  gap: var(--dev-gap);
+  max-width: min(100%, calc(100vw - 68px));
+  padding: clamp(4px, 0.8vw, 6px);
   border: 1px solid rgba(155, 228, 219, 0.34);
   background: rgba(4, 20, 28, 0.62);
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.32);
@@ -222,50 +297,57 @@ canvas {
 
 #dev-tools.is-active .dev-extra {
   display: flex;
+  flex-wrap: wrap;
 }
 
 .dev-slider {
   display: grid;
-  grid-template-columns: auto 112px;
+  grid-template-columns: auto var(--dev-slider-width);
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  min-width: 0;
+  font-size: var(--dev-font-size);
   color: #97d8cd;
 }
 
 .dev-slider input {
-  width: 112px;
+  width: var(--dev-slider-width);
+  min-width: 0;
   accent-color: #49d4d0;
 }
 
 .dev-seed {
   display: grid;
-  grid-template-columns: auto 82px;
+  grid-template-columns: auto var(--dev-seed-width);
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  min-width: 0;
+  font-size: var(--dev-font-size);
   color: #97d8cd;
 }
 
 .dev-seed input {
-  width: 82px;
+  width: var(--dev-seed-width);
   min-width: 0;
   border: 1px solid rgba(155, 228, 219, 0.34);
   background: rgba(2, 12, 18, 0.68);
   color: #d8fff6;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--dev-font-size);
 }
 
 #dev-camera-readout {
-  min-width: 128px;
+  width: var(--dev-readout-width);
+  min-width: 0;
   padding: 4px 6px;
   border: 1px solid rgba(155, 228, 219, 0.24);
   background: rgba(2, 12, 18, 0.48);
   color: #97d8cd;
-  font-size: 11px;
+  font-size: var(--dev-font-size);
   line-height: 1;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #splash {
@@ -364,23 +446,67 @@ canvas {
     left: 10px;
     right: 10px;
     bottom: 10px;
+    width: auto;
+    max-width: calc(100vw - 20px);
     align-items: flex-start;
+    --dev-slider-width: clamp(52px, 15vw, 88px);
+    --dev-seed-width: clamp(52px, 16vw, 70px);
+    --dev-readout-width: clamp(118px, 34vw, 150px);
   }
 
   .dev-extra {
     flex-wrap: wrap;
+    max-width: calc(100vw - 68px);
   }
 
   .dev-slider {
-    grid-template-columns: auto minmax(90px, 1fr);
+    grid-template-columns: auto minmax(72px, 1fr);
+    flex: 0 1 104px;
   }
 
   .dev-slider input {
     width: 100%;
   }
 
-  #dev-camera-readout {
-    min-width: 116px;
+  .dev-seed {
+    flex: 0 1 104px;
+    grid-template-columns: auto minmax(58px, 1fr);
   }
 
+  .dev-seed input {
+    width: 100%;
+  }
+
+  #dev-camera-readout {
+    flex: 0 1 var(--dev-readout-width);
+    width: var(--dev-readout-width);
+  }
+
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 900px) {
+  #touch-controls {
+    display: flex;
+  }
+
+  #dev-tools {
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 640px) and (hover: none), (max-width: 640px) and (pointer: coarse) {
+  #touch-joystick {
+    width: 108px;
+    height: 108px;
+  }
+
+  #touch-joystick-ring {
+    width: 108px;
+    height: 108px;
+  }
+
+  #touch-joystick-knob {
+    width: 44px;
+    height: 44px;
+  }
 }

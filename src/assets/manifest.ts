@@ -4,6 +4,20 @@ export const CREATURES = {
   hero: {
     key: "port-jackson",
     url: assetUrl("/assets/creatures/port jackson.svg"),
+    frames: {
+      center: {
+        key: "port-jackson-tail-fin-centre",
+        url: assetUrl("/assets/creatures/port-jackson-tail-fin-centre.png"),
+      },
+      tailRight: {
+        key: "port-jackson-tail-fin-right",
+        url: assetUrl("/assets/creatures/port-jackson-tail-fin-right.png"),
+      },
+      tailLeft: {
+        key: "port-jackson-tail-fin-left",
+        url: assetUrl("/assets/creatures/port-jackson-tail-fin-left.png"),
+      },
+    },
   },
   blueDevil: {
     key: "blue-devil",
@@ -33,6 +47,24 @@ export const CREATURES = {
     key: "killer-whale",
     url: assetUrl("/assets/creatures/killer whale.png"),
   },
+  yellowBlueFish: {
+    key: "yellow-blue-fish",
+    url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish.png"),
+    frames: {
+      center: {
+        key: "yellow-blue-fish",
+        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish.png"),
+      },
+      tailRight: {
+        key: "yellow-blue-fish-tail-right",
+        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish-tail-right.png"),
+      },
+      tailLeft: {
+        key: "yellow-blue-fish-tail-left",
+        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish-tail-left.png"),
+      },
+    },
+  },
 } as const;
 
 export const NPC_CREATURES = [
@@ -42,4 +74,33 @@ export const NPC_CREATURES = [
   CREATURES.nudhhi,
   CREATURES.seadragon,
   CREATURES.stingray,
+  CREATURES.yellowBlueFish,
 ] as const;
+
+const SEAGRASS_MEADOW_ASSET_VERSION = "directional-sway-v3";
+
+const seagrassFrame = (variant: number, frame: number, pose: string) => {
+  const variantId = variant.toString().padStart(2, "0");
+  const frameId = frame.toString().padStart(2, "0");
+
+  return {
+    key: `seagrass-meadow-${variantId}-${frameId}-${pose}`,
+    url: assetUrl(
+      `/assets/landscape/grass-current-pixelart/grass-current-variant-${variantId}-frame-${frameId}-${pose}-alpha.png?v=${SEAGRASS_MEADOW_ASSET_VERSION}`,
+    ),
+  };
+};
+
+export const SEAGRASS_MEADOW_VARIANTS = Array.from({ length: 5 }, (_, index) => {
+  const variant = index + 1;
+
+  return {
+    key: `seagrass-meadow-${variant.toString().padStart(2, "0")}`,
+    frames: [
+      seagrassFrame(variant, 1, "neutral"),
+      seagrassFrame(variant, 2, "sway-left"),
+      seagrassFrame(variant, 3, "center"),
+      seagrassFrame(variant, 4, "sway-right"),
+    ],
+  };
+});

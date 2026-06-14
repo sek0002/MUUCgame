@@ -1,12 +1,14 @@
 import Phaser from "phaser";
-import { CREATURES, NPC_CREATURES, assetUrl } from "../assets/manifest";
+import { CREATURES, NPC_CREATURES, SEAGRASS_MEADOW_VARIANTS, assetUrl } from "../assets/manifest";
 import {
   Decoration,
   CreatureKey,
   OceanZone,
   BEACH_END_X,
   CAVE_ZONE,
+  CORAL_END_X,
   DEFAULT_CAVE_SEED,
+  KELP_END_X,
   TILE,
   WATERLINE_Y,
   WORLD_HEIGHT,
@@ -21,6 +23,35 @@ import {
 } from "../sim/world";
 
 type KeySet = Record<"left" | "right" | "up" | "down", Phaser.Input.Keyboard.Key>;
+type TouchControl = keyof KeySet;
+type HeroVisibilityStatus = "visible" | "hidden";
+type FinalBiomeBackgroundLayer = {
+  image: Phaser.GameObjects.Image;
+  mask: Phaser.GameObjects.Graphics;
+  offset: { x: number; y: number };
+  scrollOffset: { y: number };
+  lastScroll?: { x: number; y: number };
+};
+type BubbleStream = {
+  x: number;
+  startY: number;
+  surfaceY: number;
+  lowerY: number;
+  delayMs: number;
+  phase: number;
+  spreadX: number;
+};
+type BubbleParticle = {
+  sprite: Phaser.GameObjects.Image;
+  streamIndex: number;
+  speed: number;
+  wobble: number;
+  phase: number;
+  trackX: number;
+  trackDrift: number;
+  delayMs: number;
+  completed: boolean;
+};
 type DevCameraTools = {
   root: HTMLElement;
   toggle: HTMLButtonElement;
@@ -28,6 +59,7 @@ type DevCameraTools = {
   zoomOut: HTMLButtonElement;
   fit: HTMLButtonElement;
   player: HTMLButtonElement;
+  teleport: HTMLButtonElement;
   xRange: HTMLInputElement;
   yRange: HTMLInputElement;
   seedInput: HTMLInputElement;
@@ -38,18 +70,183 @@ type DevCameraTools = {
 
 const BEACH_SHELF_START_X = BEACH_END_X * 0.7;
 const BEACH_SHELF_END_X = BEACH_END_X + 1500;
+const BEACH_HOUSE_PIER_X = 804;
 const SAND_VISUAL_RAISE = 24;
 const SURFACE_REST_Y = WATERLINE_Y + 24;
+const SURFACE_BOB_DEPTH = 58;
+const SURFACE_BOB_ENTRY_MAX_SPEED = 34;
+const SURFACE_BOB_MAX_PASSIVE_SINK_SPEED = 28;
 const SURFACE_BREACH_SPEED = -260;
-const SURFACE_BREACH_MAX_VELOCITY = -180;
-const SURFACE_JUMP_VELOCITY = -420;
+const SURFACE_BREACH_MAX_VELOCITY = -90;
+const SURFACE_JUMP_TRIGGER_DEPTH = 42;
+const SURFACE_JUMP_VELOCITY = -403;
+const SURFACE_REENTRY_VELOCITY_MULTIPLIER = 0.16;
+const SURFACE_REENTRY_MAX_VELOCITY = 48;
+const HERO_ACCELERATION = 760;
+const HERO_MAX_VELOCITY_X = 275;
+const HERO_MAX_VELOCITY_Y = 490;
+const HERO_IDLE_VELOCITY_DRAG = 1.75;
 const AIR_GRAVITY = 980;
 const DEPTH_GAUGE_MAX = WORLD_MAX_DEPTH_METERS;
+const BUBBLE_TEXTURE_KEY = "procedural-pixel-bubble";
+const BUBBLE_COUNT = 5760;
+const BUBBLE_STREAM_COUNT = 76;
+const BUBBLE_MIN_SPACING_FROM_TERRAIN = 42;
+const HERO_RENDER_WIDTH = 92;
+const HERO_VISIBLE_DEPTH = 20;
+const HERO_SEAGRASS_HIDDEN_DEPTH = -4.52;
+const HERO_SWIM_FRAMES = [
+  CREATURES.hero.frames.tailRight.key,
+  CREATURES.hero.frames.center.key,
+  CREATURES.hero.frames.tailLeft.key,
+  CREATURES.hero.frames.center.key,
+] as const;
+const YELLOW_BLUE_FISH_SWIM_KEY = "yellow-blue-fish-swim";
+const YELLOW_BLUE_FISH_BASE_WIDTH = 42;
+const CORAL_BACKGROUND_DISPLAY_WIDTH = 9820;
+const CORAL_BACKGROUND_DISPLAY_HEIGHT = 1946;
+const CORAL_BACKGROUND_TILE_WIDTH = 512;
+const CORAL_BACKGROUND_TILE_HEIGHT = 486;
+const SHOW_CORAL_BACKGROUND_REVIEW_ASSET = false;
+const SHOW_IMAGEGEN_PARALLAX_OVERLAY = false;
+const SHOW_DISTAL_WATER_COLUMN = false;
+const FINAL_BIOME_BACKGROUND_DEPTH = -56.6;
+const FINAL_BIOME_BACKGROUND_ALPHA = 0.92;
+const FINAL_BIOME_BACKGROUND_VIEW_MARGIN = 420;
+const FINAL_BIOME_BACKGROUND_EDGE_PADDING = 12;
+const FINAL_BIOME_BACKGROUND_SCROLL_DRIFT_Y = 0.05;
+const FINAL_BIOME_BACKGROUND_RESPONSE = 0.1;
+const FINAL_BIOME_BACKGROUND_SCALE = 0.42;
+const FINAL_BIOME_BACKGROUND_KEY = "final-background-combined";
+const FINAL_BIOME_BACKGROUND_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix.png";
+const FINAL_BIOME_SEAGRASS_IMAGE_END = 0.25;
+const FINAL_BIOME_KELP_IMAGE_END = 2 / 3;
+const DISTAL_WATER_COLUMN_KEY = "distal-water-column-imagegen";
+const DISTAL_WATER_COLUMN_URL = "/assets/landscape/coral-area/parallax-imagegen/source-water-expanded-imagegen.png";
+const DISTAL_WATER_COLUMN_SCROLL_DRIFT_X = 0.045;
+const DISTAL_WATER_COLUMN_SCROLL_DRIFT_Y = 0.032;
+const DISTAL_WATER_COLUMN_RESPONSE = 0.12;
+const DISTAL_WATER_COLUMN_SCALE = 0.88;
+const DISTAL_WATER_COLUMN_VIEW_MARGIN = 420;
+const DISTAL_WATER_COLUMN_EDGE_PADDING = 12;
+const DISTAL_WATER_COLUMN_DEPTH = -58.5;
+const DISTAL_WATER_COLUMN_ALPHA = 0.82;
+const CORAL_GARDEN_BACKDROP_KEY = "coral-garden-backdrop-imagegen";
+const CORAL_GARDEN_BACKDROP_URL = "/assets/landscape/coral-area/parallax-imagegen/source-mid-coral-kelp-zoomout3x-imagegen.png";
+const CORAL_GARDEN_BACKDROP_SCROLL_DRIFT_Y = 0.05;
+const CORAL_GARDEN_BACKDROP_RESPONSE = 0.1;
+const CORAL_GARDEN_BACKDROP_SCALE = 0.88;
+const CORAL_GARDEN_BACKDROP_VIEW_MARGIN = 420;
+const CORAL_GARDEN_BACKDROP_EDGE_PADDING = 12;
+const CORAL_GARDEN_BACKDROP_DEPTH = -57.9;
+const CORAL_GARDEN_BACKDROP_ALPHA = 0.46;
+const CORAL_GARDEN_BACKDROP_ZONE_FADE_DISTANCE = 900;
+const WATER_OVERLAY_DEPTH = -4.9;
+const WATER_DETAIL_DEPTH = -4.85;
+const IMAGEGEN_PARALLAX_LAYERS = [
+  {
+    id: "water",
+    keyPrefix: "parallax-imagegen-water",
+    urlPrefix: "/assets/landscape/coral-area/parallax-imagegen/tiles/water",
+    depth: -58,
+    alpha: 0.48,
+  },
+  {
+    id: "crag",
+    keyPrefix: "parallax-imagegen-crag",
+    urlPrefix: "/assets/landscape/coral-area/parallax-imagegen/tiles/crag",
+    depth: -57.6,
+    alpha: 0.34,
+  },
+  {
+    id: "mid",
+    keyPrefix: "parallax-imagegen-mid",
+    urlPrefix: "/assets/landscape/coral-area/parallax-imagegen/tiles/mid",
+    depth: -5.55,
+    alpha: 0.44,
+  },
+] as const;
+const CORAL_BACKGROUND_TILES = Array.from(
+  {
+    length:
+      Math.ceil(CORAL_BACKGROUND_DISPLAY_WIDTH / CORAL_BACKGROUND_TILE_WIDTH) *
+      Math.ceil(CORAL_BACKGROUND_DISPLAY_HEIGHT / CORAL_BACKGROUND_TILE_HEIGHT),
+  },
+  (_, index) => {
+    const columns = Math.ceil(CORAL_BACKGROUND_DISPLAY_WIDTH / CORAL_BACKGROUND_TILE_WIDTH);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = column * CORAL_BACKGROUND_TILE_WIDTH;
+    const y = row * CORAL_BACKGROUND_TILE_HEIGHT;
+    const width = Math.min(CORAL_BACKGROUND_TILE_WIDTH, CORAL_BACKGROUND_DISPLAY_WIDTH - x);
+    const height = Math.min(CORAL_BACKGROUND_TILE_HEIGHT, CORAL_BACKGROUND_DISPLAY_HEIGHT - y);
+    const key = `coral-waterline-halfscale-hires-${index.toString().padStart(3, "0")}`;
+
+    return {
+      key,
+      url: `/assets/landscape/coral-area/waterline-hires-halfscale-tiles/${key}.png`,
+      x,
+      y,
+      width,
+      height,
+    };
+  },
+);
+const IMAGEGEN_PARALLAX_TILES = IMAGEGEN_PARALLAX_LAYERS.flatMap((layer) =>
+  CORAL_BACKGROUND_TILES.map((tile, index) => {
+    const key = `${layer.keyPrefix}-${index.toString().padStart(3, "0")}`;
+
+    return {
+      ...tile,
+      key,
+      url: `${layer.urlPrefix}/${key}.png`,
+      layerId: layer.id,
+      depth: layer.depth,
+      alpha: layer.alpha,
+    };
+  }),
+);
+const DISTAL_WATER_COLUMN_TILES = CORAL_BACKGROUND_TILES.map((tile, index) => {
+  const key = `parallax-imagegen-water-${index.toString().padStart(3, "0")}`;
+
+  return {
+    ...tile,
+    key,
+    url: `/assets/landscape/coral-area/parallax-imagegen/tiles/water/${key}.png`,
+  };
+});
+const SEAGRASS_MEADOW_ROW_COUNT = 4;
+const SEAGRASS_MEADOW_SCALE_FACTOR = 0.25;
+const SEAGRASS_MEADOW_DENSITY_FACTOR = 0.4;
+const SEAGRASS_HIDE_DISTANCE_FROM_FLOOR = 180;
+const SEAGRASS_TERRAIN_SLOPE_SAMPLE = TILE * 2.5;
+const SEAGRASS_MAX_TERRAIN_ROTATION = 0.58;
+const SEAGRASS_STEEP_SLOPE_MIN_DEGREES = 60;
+const SEAGRASS_STEEP_SLOPE_MAX_DENSITY_MULTIPLIER = 10;
+const SEAGRASS_STEEP_SLOPE_MIN_SPACING_FACTOR = 0.22;
+const SEAGRASS_MEADOW_TRANSITION_MIN_DELAY = 2000;
+const SEAGRASS_MEADOW_TRANSITION_MAX_DELAY = 5000;
+const SAND_PALETTE_LIGHT = 0xb5997a;
+const SAND_PALETTE_MID = 0x85573d;
+const SAND_PALETTE_DEEP = 0x6b4e32;
+const SAND_PALETTE_DARK = 0x3a2316;
+const TERRAIN_GRADIENT_TEXTURE_KEY = "terrain-sand-gradient-scale";
+const TERRAIN_GRADIENT_TEXTURE_WIDTH = 1200;
+const TERRAIN_GRADIENT_TEXTURE_HEIGHT = 720;
+type SeagrassFrameSet = (typeof SEAGRASS_MEADOW_VARIANTS)[number]["frames"];
 
 export class OceanScene extends Phaser.Scene {
   private hero!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeySet;
+  private touchInput = { x: 0, y: 0 };
+  private touchJoystickPointerId?: number;
+  private touchJoystickOrigin = { x: 0, y: 0 };
+  private touchJoystickElements?: {
+    root: HTMLElement;
+    joystick: HTMLElement;
+    knob: HTMLElement;
+  };
   private rocks!: Phaser.Physics.Arcade.StaticGroup;
   private zoneLabel?: HTMLElement | null;
   private depthLabel?: HTMLElement | null;
@@ -59,10 +256,37 @@ export class OceanScene extends Phaser.Scene {
   private lightingOverlay!: Phaser.GameObjects.Graphics;
   private caveTileLayer?: Phaser.GameObjects.Graphics;
   private caveBiomeCurtain?: Phaser.GameObjects.Rectangle;
+  private terrainLineLayer?: Phaser.GameObjects.Graphics;
+  private terrainGuideLayer?: Phaser.GameObjects.Graphics;
+  private terrainTopByColumn = new Map<number, number>();
+  private terrainLabelLayer: Phaser.GameObjects.Text[] = [];
+  private bubbleStreams: BubbleStream[] = [];
+  private bubbles: BubbleParticle[] = [];
+  private distalWaterColumn?: Phaser.GameObjects.Image;
+  private distalWaterColumnMask?: Phaser.GameObjects.Graphics;
+  private distalWaterLastScroll?: { x: number; y: number };
+  private distalWaterScrollOffset = { x: 0, y: 0 };
+  private distalWaterOffset = { x: 0, y: 0 };
+  private coralGardenBackdrop?: Phaser.GameObjects.Image;
+  private coralGardenBackdropMask?: Phaser.GameObjects.Graphics;
+  private coralGardenBackdropZone?: OceanZone;
+  private coralGardenBackdropLastScroll?: { x: number; y: number };
+  private coralGardenBackdropScrollOffset = { x: 0, y: 0 };
+  private coralGardenBackdropOffset = { x: 0, y: 0 };
+  private finalBiomeBackgrounds: FinalBiomeBackgroundLayer[] = [];
+  private seagrassMeadow: Array<{ sprite: Phaser.GameObjects.Sprite; frames: SeagrassFrameSet }> = [];
+  private seagrassFrameTimer?: Phaser.Time.TimerEvent;
+  private seagrassFrameIndex = 0;
+  private heroVisibilityStatus: HeroVisibilityStatus = "visible";
   private skyClouds: Array<{ container: Phaser.GameObjects.Container; speed: number; width: number }> = [];
   private currentZoneId = "";
   private heroDirectionX: -1 | 1 = 1;
+  private heroSwimFrameIndex = 1;
+  private heroSwimFrameProgress = 0;
   private isSurfaceJumping = false;
+  private surfaceBobSuppressed = false;
+  private wasSurfaceBobbing = false;
+  private surfaceJumpHoldConsumed = false;
   private lastJumpPressed = false;
   private devCameraTools?: DevCameraTools;
   private devCameraEnabled = false;
@@ -72,6 +296,15 @@ export class OceanScene extends Phaser.Scene {
   private devCameraDragStart?: {
     pointerX: number;
     pointerY: number;
+    scrollX: number;
+    scrollY: number;
+  };
+  private devTouchPointers = new Map<number, { x: number; y: number }>();
+  private devTouchStart?: {
+    centerX: number;
+    centerY: number;
+    distance: number;
+    zoom: number;
     scrollX: number;
     scrollY: number;
   };
@@ -86,10 +319,9 @@ export class OceanScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.svg(CREATURES.hero.key, CREATURES.hero.url, {
-      width: 128,
-      height: 64,
-    });
+    this.load.image(CREATURES.hero.frames.center.key, CREATURES.hero.frames.center.url);
+    this.load.image(CREATURES.hero.frames.tailRight.key, CREATURES.hero.frames.tailRight.url);
+    this.load.image(CREATURES.hero.frames.tailLeft.key, CREATURES.hero.frames.tailLeft.url);
 
     for (const creature of NPC_CREATURES.filter((creature) => creature.url.endsWith(".svg"))) {
       this.load.svg(creature.key, creature.url, { width: 96, height: 96 });
@@ -97,8 +329,30 @@ export class OceanScene extends Phaser.Scene {
     for (const creature of NPC_CREATURES.filter((creature) => !creature.url.endsWith(".svg"))) {
       this.load.image(creature.key, creature.url);
     }
+    this.load.image(CREATURES.yellowBlueFish.frames.tailRight.key, CREATURES.yellowBlueFish.frames.tailRight.url);
+    this.load.image(CREATURES.yellowBlueFish.frames.tailLeft.key, CREATURES.yellowBlueFish.frames.tailLeft.url);
+    for (const variant of SEAGRASS_MEADOW_VARIANTS) {
+      for (const frame of variant.frames) {
+        this.load.image(frame.key, frame.url);
+      }
+    }
     this.load.image("shipwreck", assetUrl("/assets/landscape/shipwreck.png"));
     this.load.image("beach-house-only", assetUrl("/assets/landscape/beach-house-only.png"));
+    this.load.image(FINAL_BIOME_BACKGROUND_KEY, assetUrl(FINAL_BIOME_BACKGROUND_URL));
+    if (SHOW_CORAL_BACKGROUND_REVIEW_ASSET) {
+      for (const tile of CORAL_BACKGROUND_TILES) {
+        this.load.image(tile.key, assetUrl(tile.url));
+      }
+    }
+    if (SHOW_IMAGEGEN_PARALLAX_OVERLAY) {
+      for (const tile of IMAGEGEN_PARALLAX_TILES) {
+        this.load.image(tile.key, assetUrl(tile.url));
+      }
+    }
+    if (SHOW_DISTAL_WATER_COLUMN) {
+      this.load.image(DISTAL_WATER_COLUMN_KEY, assetUrl(DISTAL_WATER_COLUMN_URL));
+      this.load.image(CORAL_GARDEN_BACKDROP_KEY, assetUrl(CORAL_GARDEN_BACKDROP_URL));
+    }
   }
 
   create() {
@@ -112,12 +366,29 @@ export class OceanScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameras.main.setRoundPixels(false);
 
     this.createBackground(world.zones);
+    if (SHOW_DISTAL_WATER_COLUMN) {
+      this.createDistalWaterColumn(world.zones);
+      this.createCoralGardenBackdrop(world.zones);
+    }
+    this.createFinalBiomeBackgrounds();
+    if (SHOW_CORAL_BACKGROUND_REVIEW_ASSET) {
+      this.createCoralBackground(world.zones);
+    }
+    if (SHOW_IMAGEGEN_PARALLAX_OVERLAY) {
+      this.createImagegenParallaxOverlay(world.zones);
+    }
     this.createBeach();
     this.createWaterSurface();
     this.createRocks(world.rocks, world.caveTiles);
+    this.createTerrainGuideOverlay(world.rocks, world.zones);
+    this.createBubbleField();
+    this.prepareSeagrassTextures();
+    this.createSeagrassMeadows(world.zones);
     this.createDecorations(world.decorations);
+    this.createCreatureAnimations();
     this.createCreatures(world.creatures);
     this.createDeepShipwreck();
     this.createHero();
@@ -126,17 +397,21 @@ export class OceanScene extends Phaser.Scene {
     this.createLightingOverlay();
 
     this.physics.add.collider(this.hero, this.rocks);
-    this.cameras.main.startFollow(this.hero, true, 0.08, 0.08);
-    this.cameras.main.setDeadzone(160, 96);
+    this.cameras.main.startFollow(this.hero, true, 0.055, 0.055);
+    this.cameras.main.setDeadzone(190, 118);
     this.cameras.main.fadeIn(450, 5, 20, 31);
   }
 
   update(time: number, delta: number) {
     this.updateDeveloperCamera(delta);
-    this.handleInput();
+    this.handleInput(delta);
     this.updateSurfacePhysics(time);
+    this.clampHeroSwimVelocity();
     this.updateHeroPresentation();
+    this.updateBubbles(time, delta);
     this.updateParallax(delta);
+    this.updateTerrainLabelScale();
+    this.updateHeroVisibilityStatus();
     this.updateCaveVisibility();
     this.updateHud();
     this.updateLighting();
@@ -197,6 +472,99 @@ export class OceanScene extends Phaser.Scene {
     }
 
     this.createCurrentLines();
+  }
+
+  private createCoralBackground(zones: OceanZone[]) {
+    const coralZone = this.shallowGardenDisplayZone(zones);
+    if (!coralZone) return;
+
+    for (const tile of CORAL_BACKGROUND_TILES) {
+      this.add
+        .image(coralZone.startX + tile.x, WATERLINE_Y + tile.y, tile.key)
+        .setOrigin(0)
+        .setDepth(-5.45)
+        .setDisplaySize(tile.width, tile.height);
+    }
+  }
+
+  private createImagegenParallaxOverlay(zones: OceanZone[]) {
+    const coralZone = this.shallowGardenDisplayZone(zones);
+    if (!coralZone) return;
+
+    for (const tile of IMAGEGEN_PARALLAX_TILES) {
+      this.add
+        .image(coralZone.startX + tile.x, WATERLINE_Y + tile.y, tile.key)
+        .setOrigin(0)
+        .setDepth(tile.depth)
+        .setAlpha(tile.alpha)
+        .setDisplaySize(tile.width, tile.height);
+    }
+  }
+
+  private createDistalWaterColumn(zones: OceanZone[]) {
+    if (!zones.some((zone) => this.isShallowGardenZoneId(zone.id))) return;
+
+    this.distalWaterColumn = this.add
+      .image(0, 0, DISTAL_WATER_COLUMN_KEY)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DISTAL_WATER_COLUMN_DEPTH)
+      .setAlpha(DISTAL_WATER_COLUMN_ALPHA);
+    this.distalWaterColumnMask = this.add.graphics().setScrollFactor(0).setVisible(false);
+    this.distalWaterColumn.setMask(this.distalWaterColumnMask.createGeometryMask());
+    this.updateDistalWaterColumn();
+  }
+
+  private createCoralGardenBackdrop(zones: OceanZone[]) {
+    this.coralGardenBackdropZone = this.shallowGardenDisplayZone(zones);
+    if (!this.coralGardenBackdropZone) return;
+
+    this.coralGardenBackdrop = this.add
+      .image(0, 0, CORAL_GARDEN_BACKDROP_KEY)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(CORAL_GARDEN_BACKDROP_DEPTH)
+      .setAlpha(0);
+    this.coralGardenBackdropMask = this.add.graphics().setScrollFactor(0).setVisible(false);
+    this.coralGardenBackdrop.setMask(this.coralGardenBackdropMask.createGeometryMask());
+    this.updateCoralGardenBackdrop();
+  }
+
+  private createFinalBiomeBackgrounds() {
+    this.finalBiomeBackgrounds.forEach((layer) => {
+      layer.image.destroy();
+      layer.mask.destroy();
+    });
+    this.finalBiomeBackgrounds = [];
+
+    const image = this.add
+      .image(0, 0, FINAL_BIOME_BACKGROUND_KEY)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(FINAL_BIOME_BACKGROUND_DEPTH)
+      .setAlpha(FINAL_BIOME_BACKGROUND_ALPHA);
+    const mask = this.add.graphics().setScrollFactor(0).setVisible(false);
+    image.setMask(mask.createGeometryMask());
+    this.finalBiomeBackgrounds.push({
+      image,
+      mask,
+      offset: { x: 0, y: 0 },
+      scrollOffset: { y: 0 },
+    });
+
+    this.updateFinalBiomeBackgrounds();
+  }
+
+  private shallowGardenDisplayZone(zones: OceanZone[]) {
+    const seagrass = zones.find((zone) => zone.id === "coral");
+    const kelp = zones.find((zone) => zone.id === "kelp");
+    if (!seagrass) return kelp;
+    if (!kelp) return seagrass;
+    return { ...seagrass, endX: kelp.endX };
+  }
+
+  private isShallowGardenZoneId(zoneId: OceanZone["id"]) {
+    return zoneId === "coral" || zoneId === "kelp";
   }
 
   private createSkyClouds() {
@@ -316,9 +684,36 @@ export class OceanScene extends Phaser.Scene {
 
   private terrainFillColorAtY(y: number) {
     const t = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
-    if (t < 0.38) return this.mixHexColor(0xd9bc78, 0xa88a5a, t / 0.38);
-    if (t < 0.74) return this.mixHexColor(0xa88a5a, 0x6f6048, (t - 0.38) / 0.36);
-    return this.mixHexColor(0x6f6048, 0x332d25, (t - 0.74) / 0.26);
+    return this.sandPaletteColorAt(Phaser.Math.Clamp(t * 0.94, 0, 1));
+  }
+
+  private terrainFillColorAt(x: number, y: number) {
+    const seagrassMidX = BEACH_END_X + (CORAL_END_X - BEACH_END_X) * 0.5;
+    const shoreT = this.smooth01((x - BEACH_END_X * 0.45) / Math.max(1, seagrassMidX + 520 - BEACH_END_X * 0.45));
+    const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const scaleT = Phaser.Math.Clamp(shoreT * 0.72 + depthT * 0.58, 0, 1);
+    return this.sandPaletteColorAt(scaleT);
+  }
+
+  private sandPaletteColorAt(t: number) {
+    const value = this.smooth01(t);
+    const stops = [
+      { t: 0, color: SAND_PALETTE_LIGHT },
+      { t: 0.34, color: 0xa88a68 },
+      { t: 0.58, color: SAND_PALETTE_MID },
+      { t: 0.78, color: SAND_PALETTE_DEEP },
+      { t: 1, color: SAND_PALETTE_DARK },
+    ];
+
+    for (let i = 1; i < stops.length; i += 1) {
+      const previous = stops[i - 1];
+      const next = stops[i];
+      if (value <= next.t) {
+        return this.mixHexColor(previous.color, next.color, this.smooth01((value - previous.t) / (next.t - previous.t)));
+      }
+    }
+
+    return SAND_PALETTE_DARK;
   }
 
   private smooth01(value: number) {
@@ -505,10 +900,10 @@ export class OceanScene extends Phaser.Scene {
 
   private createBeachHousePier() {
     this.add
-      .image(BEACH_END_X * 0.72, WATERLINE_Y + 78, "beach-house-only")
+      .image(BEACH_HOUSE_PIER_X, WATERLINE_Y + 78, "beach-house-only")
       .setOrigin(0.25, 1)
       .setScale(0.725)
-      .setDepth(-35)
+      .setDepth(-2.8)
       .setAlpha(0.95);
   }
 
@@ -521,7 +916,7 @@ export class OceanScene extends Phaser.Scene {
     const washPoints = [new Phaser.Geom.Point(startX, WATERLINE_Y - 6)];
     for (let x = startX; x <= endX; x += 54) {
       const shelfY = this.beachShelfYAt(x);
-      const edgeY = Phaser.Math.Linear(WATERLINE_Y + 8, shelfY - 18, this.smooth01(x / endX));
+      const edgeY = Phaser.Math.Linear(WATERLINE_Y - 4, shelfY - 74, this.smooth01(x / endX));
       washPoints.push(new Phaser.Geom.Point(x, edgeY + Math.sin(x * 0.014) * 5));
     }
     washPoints.push(new Phaser.Geom.Point(endX, WATERLINE_Y - 8));
@@ -531,8 +926,8 @@ export class OceanScene extends Phaser.Scene {
       const x = 24 + i * 54;
       if (x > endX) break;
       const edgeY = Phaser.Math.Linear(
-        WATERLINE_Y + 16,
-        this.beachShelfYAt(x) - 24,
+        WATERLINE_Y + 2,
+        this.beachShelfYAt(x) - 82,
         this.smooth01(x / endX),
       );
       surf.fillStyle(i % 3 === 0 ? 0xffffff : 0xcffff5, i % 3 === 0 ? 0.58 : 0.34);
@@ -615,29 +1010,31 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private createWaterSurface() {
-    const surface = this.add.graphics().setDepth(-30);
-    surface.fillStyle(0x2f8da0, 0.38);
-    surface.fillRect(0, WATERLINE_Y - 7, WORLD_WIDTH, 22);
+    const surfaceTint = this.add.graphics().setDepth(WATER_OVERLAY_DEPTH);
+    surfaceTint.fillStyle(0x2f8da0, 0.38);
+    surfaceTint.fillRect(0, WATERLINE_Y - 7, WORLD_WIDTH, 22);
 
-    this.drawWaveRibbon(surface, WATERLINE_Y - 2, 0xd5fff2, 0.9, 5, 0.019, 13);
-    this.drawWaveRibbon(surface, WATERLINE_Y + 18, 0x75d2de, 0.6, 3, 0.015, 19);
-    this.drawWaveRibbon(surface, WATERLINE_Y + 42, 0x1f6d8d, 0.42, 4, 0.011, 31);
+    this.addAnimatedWaveRibbon(WATERLINE_Y - 2, 0xd5fff2, 0.9, 5, 0.019, 13, 30, 14, 4200);
+    this.addAnimatedWaveRibbon(WATERLINE_Y + 18, 0x75d2de, 0.6, 3, 0.015, 19, -24, 11, 4700);
+    this.addAnimatedWaveRibbon(WATERLINE_Y + 42, 0x1f6d8d, 0.42, 4, 0.011, 31, 38, 12, 5100);
 
     const bandColors = [0x174d73, 0x236c96, 0x2e89ac, 0x72c8d8, 0x1e5f83];
     for (let row = 0; row < 9; row += 1) {
       const y = WATERLINE_Y + 22 + row * 17;
       const color = bandColors[row % bandColors.length];
-      this.drawWaveRibbon(surface, y, color, 0.22 + row * 0.018, 2, 0.006 + row * 0.0012, row * 41);
+      this.addAnimatedWaveRibbon(
+        y,
+        color,
+        0.22 + row * 0.018,
+        2,
+        0.006 + row * 0.0012,
+        row * 41,
+        (row % 2 === 0 ? 20 : -28) + row * 3,
+        6 + row * 0.9,
+        3600 + row * 310,
+        row * 120,
+      );
     }
-
-    this.tweens.add({
-      targets: surface,
-      y: 7,
-      duration: 5200,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
 
     for (let i = 0; i < 230; i += 1) {
       const x = 22 + i * 42;
@@ -653,19 +1050,226 @@ export class OceanScene extends Phaser.Scene {
           color,
           nearHorizon ? 0.34 : 0.18,
         )
-        .setDepth(-29)
+        .setDepth(WATER_DETAIL_DEPTH)
         .setAngle(Math.sin(i) * 3);
 
       this.tweens.add({
         targets: glint,
-        y: glint.y + (nearHorizon ? 4 : 8) * (i % 2 === 0 ? 1 : -1),
-        duration: 3600 + (i % 11) * 260,
+        x: glint.x + (nearHorizon ? 24 : 38) * (i % 2 === 0 ? 1 : -1),
+        y: glint.y + (nearHorizon ? 10 : 16) * (i % 2 === 0 ? 1 : -1),
+        duration: 2800 + (i % 11) * 210,
         delay: (i % 17) * 110,
         yoyo: true,
         repeat: -1,
         ease: "Sine.inOut",
       });
     }
+  }
+
+  private createBubbleField() {
+    this.createBubbleTexture();
+    this.bubbles = [];
+    this.bubbleStreams = Array.from({ length: BUBBLE_STREAM_COUNT }, (_, index) =>
+      this.createBubbleStream(index / BUBBLE_STREAM_COUNT, true),
+    );
+
+    for (let i = 0; i < BUBBLE_COUNT; i += 1) {
+      const sprite = this.add
+        .image(0, 0, BUBBLE_TEXTURE_KEY)
+        .setDepth(WATER_DETAIL_DEPTH + 0.18)
+        .setBlendMode(Phaser.BlendModes.SCREEN);
+      const streamIndex = i % BUBBLE_STREAM_COUNT;
+      const memberIndex = Math.floor(i / BUBBLE_STREAM_COUNT);
+
+      const bubble: BubbleParticle = {
+        sprite,
+        streamIndex,
+        speed: 10,
+        wobble: 8,
+        phase: 0,
+        trackX: 0,
+        trackDrift: 0,
+        delayMs: 0,
+        completed: false,
+      };
+      this.resetBubbleInStream(bubble, memberIndex, true);
+      this.bubbles.push(bubble);
+    }
+  }
+
+  private createBubbleTexture() {
+    if (this.textures.exists(BUBBLE_TEXTURE_KEY)) return;
+    const bubble = this.make.graphics({ x: 0, y: 0 }, false);
+    bubble.clear();
+    bubble.fillStyle(0xd8fff6, 0.16);
+    bubble.fillCircle(16, 16, 12);
+    bubble.lineStyle(3, 0xa8fff0, 0.62);
+    bubble.strokeCircle(16, 16, 10);
+    bubble.lineStyle(2, 0xffffff, 0.7);
+    bubble.beginPath();
+    bubble.moveTo(10, 9);
+    bubble.lineTo(13, 7);
+    bubble.lineTo(16, 8);
+    bubble.strokePath();
+    bubble.fillStyle(0xffffff, 0.72);
+    bubble.fillRect(9, 13, 3, 3);
+    bubble.generateTexture(BUBBLE_TEXTURE_KEY, 32, 32);
+    bubble.destroy();
+  }
+
+  private updateBubbles(time: number, delta: number) {
+    if (this.bubbles.length === 0) return;
+    const seconds = delta / 1000;
+    const streamActiveCounts = new Array(this.bubbleStreams.length).fill(0);
+
+    for (const stream of this.bubbleStreams) {
+      if (stream.delayMs > 0) stream.delayMs -= delta;
+    }
+
+    for (const bubble of this.bubbles) {
+      const stream = this.bubbleStreams[bubble.streamIndex];
+      if (!stream) continue;
+      if (stream.delayMs > 0) {
+        bubble.sprite.setVisible(false);
+        continue;
+      }
+
+      if (bubble.delayMs > 0) {
+        bubble.delayMs -= delta;
+        bubble.sprite.setVisible(false);
+        streamActiveCounts[bubble.streamIndex] += 1;
+        continue;
+      }
+      if (bubble.completed) continue;
+
+      bubble.sprite.setVisible(true);
+      bubble.sprite.y -= bubble.speed * seconds;
+      bubble.sprite.x =
+        stream.x +
+        bubble.trackX +
+        Phaser.Math.Linear(0, bubble.trackDrift, Phaser.Math.Clamp((stream.startY - bubble.sprite.y) / Math.max(1, stream.startY - stream.surfaceY), 0, 1)) +
+        Math.sin(time * 0.0018 + bubble.phase + bubble.sprite.y * 0.018) * bubble.wobble;
+      bubble.sprite.alpha = Phaser.Math.Clamp((bubble.sprite.y - stream.surfaceY) / 120, 0, 1) * 0.54;
+
+      if (bubble.sprite.y <= stream.surfaceY + 10) {
+        bubble.completed = true;
+        bubble.sprite.setVisible(false);
+      } else {
+        streamActiveCounts[bubble.streamIndex] += 1;
+      }
+    }
+
+    for (let streamIndex = 0; streamIndex < this.bubbleStreams.length; streamIndex += 1) {
+      const stream = this.bubbleStreams[streamIndex];
+      if (stream.delayMs <= 0 && streamActiveCounts[streamIndex] === 0) {
+        this.bubbleStreams[streamIndex] = this.createBubbleStream(this.nearbyBubbleStreamRatio());
+        let memberIndex = 0;
+        for (const bubble of this.bubbles) {
+          if (bubble.streamIndex !== streamIndex) continue;
+          this.resetBubbleInStream(bubble, memberIndex);
+          memberIndex += 1;
+        }
+      }
+    }
+  }
+
+  private createBubbleStream(xRatio = Math.random(), randomizeAge = false): BubbleStream {
+    let x = Phaser.Math.Clamp(xRatio * WORLD_WIDTH + (Math.random() - 0.5) * 680, 24, WORLD_WIDTH - 24);
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const surfaceLimit = this.bubbleSurfaceLimitYAt(x);
+      const terrainLimit = this.bubbleTerrainLimitYAt(x);
+      if (terrainLimit - surfaceLimit > 72) break;
+      x = 24 + Math.random() * (WORLD_WIDTH - 48);
+    }
+    const surfaceLimit = this.bubbleSurfaceLimitYAt(x);
+    const terrainLimit = this.bubbleTerrainLimitYAt(x);
+    const lowerLimit = Math.max(surfaceLimit + 32, terrainLimit);
+    const usableHeight = lowerLimit - surfaceLimit;
+    const startY = surfaceLimit + Phaser.Math.Clamp(Math.random() * usableHeight, 60, usableHeight);
+
+    return {
+      x,
+      startY,
+      surfaceY: surfaceLimit + Math.random() * 18,
+      lowerY: lowerLimit,
+      delayMs: randomizeAge ? Math.random() * 400 : 20 + Math.random() * 250,
+      phase: Math.random() * Math.PI * 2,
+      spreadX: 10 + Math.random() * 29,
+    };
+  }
+
+  private resetBubbleInStream(bubble: BubbleParticle, memberIndex: number, randomizeAge = false) {
+    const stream = this.bubbleStreams[bubble.streamIndex];
+    if (!stream) return;
+    const streamLength = Math.max(1, stream.startY - stream.surfaceY);
+    const stagger = memberIndex * (120 + Math.random() * 105);
+    const yOffset = randomizeAge ? Math.random() * streamLength : Math.random() * 80;
+    const scale = 0.08 + Math.random() * 0.23;
+
+    bubble.trackX = this.randomSignedPower(1.8) * stream.spreadX;
+    bubble.trackDrift = this.randomSignedPower(1.2) * (stream.spreadX * 0.75);
+    bubble.speed = Phaser.Math.Clamp(5 + Math.pow(Math.random(), 1.9) * 52 + Math.random() * 7, 5, 64);
+    bubble.wobble = 3 + Math.random() * 10;
+    bubble.phase = Math.random() * Math.PI * 2;
+    bubble.delayMs = randomizeAge ? Math.random() * 300 : stagger * (0.13 + Math.random() * 0.12);
+    bubble.completed = false;
+    const initialY = randomizeAge
+      ? stream.surfaceY + Math.random() * streamLength
+      : stream.startY + Math.random() * Math.min(90, streamLength * 0.16);
+    bubble.sprite
+      .setPosition(stream.x + bubble.trackX, Phaser.Math.Clamp(initialY + yOffset * 0.12, stream.surfaceY + 24, stream.lowerY))
+      .setScale(scale)
+      .setAlpha(0.2 + Math.random() * 0.38)
+      .setTint(Math.random() > 0.72 ? 0xffffff : 0xacefff);
+  }
+
+  private nearbyBubbleStreamRatio() {
+    if (this.bubbleStreams.length === 0 || Math.random() > 0.38) return Math.random();
+    const anchor = this.bubbleStreams[Math.floor(Math.random() * this.bubbleStreams.length)];
+    const nearbyX = anchor.x + this.randomSignedPower(1.6) * (180 + Math.random() * 620);
+    return Phaser.Math.Clamp(nearbyX / WORLD_WIDTH, 0, 1);
+  }
+
+  private randomSignedPower(power: number) {
+    const sign = Math.random() < 0.5 ? -1 : 1;
+    return sign * Math.pow(Math.random(), power);
+  }
+
+  private bubbleSurfaceLimitYAt(x: number) {
+    if (x > BEACH_SHELF_END_X + 420) return WATERLINE_Y + 12;
+    return Math.max(WATERLINE_Y + 12, this.beachShelfYAt(x) - 86);
+  }
+
+  private bubbleTerrainLimitYAt(x: number) {
+    if (this.terrainTopByColumn.size === 0) return WORLD_HEIGHT - TILE * 2;
+    return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn) - BUBBLE_MIN_SPACING_FROM_TERRAIN;
+  }
+
+  private addAnimatedWaveRibbon(
+    baseY: number,
+    color: number,
+    alpha: number,
+    thickness: number,
+    frequency: number,
+    phase: number,
+    driftX: number,
+    driftY: number,
+    duration: number,
+    delay = 0,
+  ) {
+    const ribbon = this.add.graphics().setDepth(WATER_OVERLAY_DEPTH);
+    this.drawWaveRibbon(ribbon, baseY, color, alpha, thickness, frequency, phase);
+
+    this.tweens.add({
+      targets: ribbon,
+      x: driftX,
+      y: driftY,
+      duration,
+      delay,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
   }
 
   private drawWaveRibbon(
@@ -679,12 +1283,12 @@ export class OceanScene extends Phaser.Scene {
   ) {
     graphics.lineStyle(thickness, color, alpha);
     graphics.beginPath();
-    for (let x = 0; x <= WORLD_WIDTH; x += 18) {
+    for (let x = -96; x <= WORLD_WIDTH + 96; x += 18) {
       const y =
         baseY +
         Math.sin(x * frequency + phase) * 7 +
         Math.sin(x * frequency * 0.37 + phase * 0.2) * 5;
-      if (x === 0) graphics.moveTo(x, y);
+      if (x === -96) graphics.moveTo(x, y);
       else graphics.lineTo(x, y);
     }
     graphics.strokePath();
@@ -703,7 +1307,7 @@ export class OceanScene extends Phaser.Scene {
           this.depthAccentColorAtY(y),
           y > WATERLINE_Y + 900 ? 0.12 : 0.18,
         )
-        .setDepth(-28);
+        .setDepth(WATER_DETAIL_DEPTH);
 
       this.tweens.add({
         targets: line,
@@ -721,11 +1325,14 @@ export class OceanScene extends Phaser.Scene {
 
   private createRocks(rocks: { x: number; y: number; zoneId: string; variant: number }[], caveTiles: Set<string>) {
     this.rocks = this.physics.add.staticGroup();
-    this.createBeachCollision();
+    const terrainTopByColumn = this.buildTerrainTopByColumn(rocks);
+    this.terrainTopByColumn = terrainTopByColumn;
+    this.createTerrainSurfaceCollision(terrainTopByColumn);
     const visibleRocks = rocks.filter((rock) => rock.x >= BEACH_END_X + 360);
-    this.createRockVisuals(visibleRocks, caveTiles);
+    this.createRockVisuals(visibleRocks, caveTiles, terrainTopByColumn);
 
-    for (const run of this.collectRockRuns(visibleRocks)) {
+    const caveAndWallRocks = visibleRocks.filter((rock) => rock.y > this.smoothedTerrainGuideYAt(rock.x, terrainTopByColumn) + TILE * 1.5);
+    for (const run of this.collectRockRuns(caveAndWallRocks)) {
       const width = (run.endTx - run.startTx + 1) * TILE;
       const tile = this.add
         .rectangle(run.startTx * TILE + width / 2, run.ty * TILE + TILE / 2, width, TILE, 0x000000, 0)
@@ -735,9 +1342,13 @@ export class OceanScene extends Phaser.Scene {
     this.rocks.refresh();
   }
 
-  private createRockVisuals(rocks: { x: number; y: number; zoneId: string; variant: number }[], caveTiles: Set<string>) {
+  private createRockVisuals(
+    rocks: { x: number; y: number; zoneId: string; variant: number }[],
+    caveTiles: Set<string>,
+    terrainTopByColumn: Map<number, number>,
+  ) {
     const terrainSkin = this.add.graphics().setDepth(-5.5);
-    this.drawSmoothTerrainSkin(terrainSkin, rocks);
+    this.drawSmoothTerrainSkin(terrainSkin, terrainTopByColumn);
     const surfaceRocks = this.add.graphics().setDepth(-5.25);
     this.drawSurfaceRockDecorations(surfaceRocks, rocks);
     this.caveBiomeCurtain = this.add
@@ -746,6 +1357,160 @@ export class OceanScene extends Phaser.Scene {
       .setDepth(-4.75)
       .setVisible(false);
     this.drawCaveTileOverlay(caveTiles);
+  }
+
+  private buildTerrainTopByColumn(rocks: { x: number; y: number }[]) {
+    const topByColumn = new Map<number, number>();
+    for (const rock of rocks) {
+      const tx = Math.round(rock.x / TILE);
+      const current = topByColumn.get(tx);
+      if (current === undefined || rock.y < current) {
+        topByColumn.set(tx, rock.y);
+      }
+    }
+    return topByColumn;
+  }
+
+  private createTerrainGuideOverlay(rocks: { x: number; y: number }[], zones: OceanZone[]) {
+    const line = this.add.graphics().setDepth(4499).setVisible(true);
+    const guide = this.add.graphics().setDepth(4500).setVisible(false);
+    this.terrainLineLayer = line;
+    this.terrainGuideLayer = guide;
+
+    const topByColumn = this.buildTerrainTopByColumn(rocks);
+
+    const columnStep = TILE * 2;
+    const guideSpacing = TILE * 18;
+    guide.lineStyle(1, 0xdcc15f, 0.42);
+    for (let x = 0; x <= WORLD_WIDTH; x += guideSpacing) {
+      const terrainY = this.terrainSurfaceYAt(x, topByColumn);
+      guide.beginPath();
+      guide.moveTo(x, WATERLINE_Y);
+      guide.lineTo(x, terrainY);
+      guide.strokePath();
+    }
+
+    line.lineStyle(5, 0x06151d, 0.58);
+    this.strokeTerrainGuideLine(line, topByColumn, columnStep);
+    line.lineStyle(2, 0xff4f56, 0.92);
+    this.strokeTerrainGuideLine(line, topByColumn, columnStep);
+    this.createTerrainBiomeLabels(zones, topByColumn);
+  }
+
+  private strokeTerrainGuideLine(graphics: Phaser.GameObjects.Graphics, topByColumn: Map<number, number>, step: number) {
+    const points: Array<{ x: number; y: number }> = [];
+    for (let x = 0; x <= WORLD_WIDTH; x += step) {
+      points.push({ x, y: this.smoothedTerrainGuideYAt(x, topByColumn) });
+    }
+    if (points.length < 2) return;
+
+    graphics.beginPath();
+    graphics.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const current = points[i];
+      const next = points[i + 1];
+      const midX = (current.x + next.x) / 2;
+      const midY = (current.y + next.y) / 2;
+      const from = points[i - 1];
+      this.drawQuadratic(graphics, from.x, from.y, current.x, current.y, midX, midY, 4);
+    }
+    const last = points[points.length - 1];
+    graphics.lineTo(last.x, last.y);
+    graphics.strokePath();
+  }
+
+  private smoothedTerrainGuideYAt(x: number, topByColumn: Map<number, number>) {
+    const tx = Math.round(x / TILE);
+    let weighted = 0;
+    let weightTotal = 0;
+
+    for (let offset = -5; offset <= 5; offset += 1) {
+      const sampleX = (tx + offset) * TILE;
+      if (sampleX < 0 || sampleX > WORLD_WIDTH) continue;
+      const weight = 6 - Math.abs(offset);
+      weighted += this.terrainSurfaceYAt(sampleX, topByColumn) * weight;
+      weightTotal += weight;
+    }
+
+    return weightTotal > 0 ? weighted / weightTotal : this.terrainSurfaceYAt(x, topByColumn);
+  }
+
+  private terrainGuideRotationAt(x: number, topByColumn: Map<number, number>) {
+    return Phaser.Math.Clamp(
+      this.terrainGuideSlopeAngleAt(x, topByColumn),
+      -SEAGRASS_MAX_TERRAIN_ROTATION,
+      SEAGRASS_MAX_TERRAIN_ROTATION,
+    );
+  }
+
+  private terrainGuideSlopeAngleAt(x: number, topByColumn: Map<number, number>) {
+    const leftX = Phaser.Math.Clamp(x - SEAGRASS_TERRAIN_SLOPE_SAMPLE, 0, WORLD_WIDTH);
+    const rightX = Phaser.Math.Clamp(x + SEAGRASS_TERRAIN_SLOPE_SAMPLE, 0, WORLD_WIDTH);
+    if (rightX <= leftX) return 0;
+
+    const leftY = this.smoothedTerrainGuideYAt(leftX, topByColumn);
+    const rightY = this.smoothedTerrainGuideYAt(rightX, topByColumn);
+    return Math.atan2(rightY - leftY, rightX - leftX);
+  }
+
+  private terrainSurfaceYAt(x: number, topByColumn?: Map<number, number>) {
+    if (x < BEACH_SHELF_END_X + 420) {
+      const t = this.smooth01((x - BEACH_END_X) / (BEACH_SHELF_END_X + 420 - BEACH_END_X));
+      const beachY = this.beachSandVisualYAt(x);
+      const oceanY = this.smoothSeafloorYAt(x);
+      if (x < BEACH_END_X) return beachY;
+      return Phaser.Math.Linear(beachY, oceanY, t);
+    }
+
+    if (!topByColumn) return seafloorYAtX(x);
+
+    const tx = Math.round(x / TILE);
+    const direct = topByColumn.get(tx);
+    if (direct !== undefined) return direct;
+
+    for (let radius = 1; radius <= 4; radius += 1) {
+      const left = topByColumn.get(tx - radius);
+      const right = topByColumn.get(tx + radius);
+      if (left !== undefined && right !== undefined) return (left + right) / 2;
+      if (left !== undefined) return left;
+      if (right !== undefined) return right;
+    }
+
+    return seafloorYAtX(x);
+  }
+
+  private createTerrainBiomeLabels(zones: OceanZone[], topByColumn: Map<number, number>) {
+    this.terrainLabelLayer.forEach((label) => label.destroy());
+    this.terrainLabelLayer = [];
+
+    for (const zone of zones) {
+      const labelX = zone.id === "beach" ? zone.startX + 24 : Phaser.Math.Clamp((zone.startX + zone.endX) / 2, 120, WORLD_WIDTH - 120);
+      const originX = zone.id === "beach" ? 0 : 0.5;
+      const lineY = this.smoothedTerrainGuideYAt(labelX, topByColumn);
+      const label = this.add
+        .text(labelX, lineY - 34, zone.name, {
+          fontFamily: "'Courier New', monospace",
+          fontSize: "18px",
+          color: "#f8fbff",
+          backgroundColor: "rgba(5, 18, 25, 0.68)",
+          padding: { x: 8, y: 4 },
+        })
+        .setOrigin(originX, 1)
+        .setDepth(4501)
+        .setStroke("#051219", 4)
+        .setAlpha(0.94);
+      this.terrainLabelLayer.push(label);
+    }
+    this.updateTerrainLabelScale();
+  }
+
+  private updateTerrainLabelScale() {
+    if (this.terrainLabelLayer.length === 0) return;
+    const camera = this.cameras.main;
+    const scale = Phaser.Math.Clamp(1 / camera.zoom, 1, 42);
+    for (const label of this.terrainLabelLayer) {
+      label.setScale(scale);
+    }
   }
 
   private drawCaveTileOverlay(caveTiles: Set<string>) {
@@ -843,68 +1608,16 @@ export class OceanScene extends Phaser.Scene {
 
   private drawSmoothTerrainSkin(
     graphics: Phaser.GameObjects.Graphics,
-    rocks: { x: number; y: number }[],
+    terrainTopByColumn: Map<number, number>,
   ) {
-    if (rocks.length === 0) return;
+    if (terrainTopByColumn.size === 0) return;
 
-    const rawTopByTile = new Map<number, number>();
-    for (const rock of rocks) {
-      const tx = Math.round(rock.x / TILE);
-      const current = rawTopByTile.get(tx);
-      if (current === undefined || rock.y < current) rawTopByTile.set(tx, rock.y);
-    }
-
-    const tileColumns = [...rawTopByTile.keys()];
-    const beachLinkEndTx = Math.floor((BEACH_END_X + BEACH_SHELF_END_X * 0.18) / TILE);
-    const baseStartTx = Math.floor(BEACH_END_X / TILE);
-    const firstRockTx = Math.min(...tileColumns);
-    const shorelineStartTx = Math.floor(Math.max(baseStartTx, BEACH_END_X / TILE - 2));
-    const startTx = Math.min(firstRockTx, shorelineStartTx);
-    const endTx = Math.min(Math.ceil(WORLD_WIDTH / TILE), Math.max(...tileColumns));
-    const smoothedTopByTile = new Map<number, number>();
-    const fallbackTopAt = (tx: number) => {
-      const x = tx * TILE;
-      if (x < BEACH_END_X) {
-        return this.sandBackdropTopYAt(x);
-      }
-      if (x <= BEACH_SHELF_END_X + 360) {
-        return this.sandBackdropTopYAt(x);
-      }
-      return seafloorYAtX(x) + TILE;
-    };
-    const rawTopAt = (tx: number) => rawTopByTile.get(tx) ?? fallbackTopAt(tx);
-
-    for (let tx = startTx; tx <= endTx; tx += 1) {
-      let weightedY = 0;
-      let totalWeight = 0;
-      for (let offset = -5; offset <= 5; offset += 1) {
-        const neighborTx = Phaser.Math.Clamp(tx + offset, startTx, endTx);
-        const weight = 6 - Math.abs(offset);
-        weightedY += rawTopAt(neighborTx) * weight;
-        totalWeight += weight;
-      }
-      const rawY = rawTopAt(tx);
-      const averagedY = weightedY / totalWeight;
-      smoothedTopByTile.set(tx, Phaser.Math.Clamp(averagedY, rawY - 68, rawY + 68));
-    }
-
-    const surfaceYAtX = (x: number) => {
-      const tile = Phaser.Math.Clamp(x / TILE, startTx, endTx);
-      const leftTx = Math.floor(tile);
-      const rightTx = Math.min(endTx, leftTx + 1);
-      const t = this.smooth01(tile - leftTx);
-      const leftY = smoothedTopByTile.get(leftTx) ?? rawTopAt(leftTx);
-      const rightY = smoothedTopByTile.get(rightTx) ?? leftY;
-      return Phaser.Math.Linear(leftY, rightY, t);
-    };
-
-    const startX = startTx * TILE;
-    const endX = Math.min(WORLD_WIDTH, endTx * TILE);
+    const startX = 0;
+    const endX = WORLD_WIDTH;
     const capStep = 48;
-    const gradientBandHeight = 24;
     const topPoints: Phaser.Geom.Point[] = [];
     for (let x = startX; x <= endX; x += capStep) {
-      const surfaceY = surfaceYAtX(x);
+      const surfaceY = this.smoothedTerrainGuideYAt(x, terrainTopByColumn);
       topPoints.push(new Phaser.Geom.Point(x, surfaceY));
     }
 
@@ -920,19 +1633,103 @@ export class OceanScene extends Phaser.Scene {
     maskShape.closePath();
     maskShape.fillPath();
     maskShape.setVisible(false);
-    graphics.setMask(maskShape.createGeometryMask());
+    const terrainMask = maskShape.createGeometryMask();
 
-    for (let y = WATERLINE_Y; y < WORLD_HEIGHT; y += gradientBandHeight) {
-      graphics.fillStyle(this.terrainFillColorAtY(y + gradientBandHeight / 2), 1);
-      graphics.fillRect(startX, y, endX - startX, gradientBandHeight + 1);
-    }
+    this.prepareTerrainGradientTexture();
+    this.add
+      .image(startX, WATERLINE_Y, TERRAIN_GRADIENT_TEXTURE_KEY)
+      .setOrigin(0)
+      .setDisplaySize(endX - startX, WORLD_HEIGHT - WATERLINE_Y)
+      .setDepth(graphics.depth)
+      .setMask(terrainMask);
+
+    graphics.setMask(terrainMask);
 
     for (let y = WATERLINE_Y + 320; y < WORLD_HEIGHT; y += 720) {
       const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
-      const color = this.mixHexColor(0xd1ad6d, 0x4a4132, depthT);
+      const color = this.mixHexColor(SAND_PALETTE_LIGHT, SAND_PALETTE_DARK, depthT);
       graphics.fillStyle(color, 0.014);
       graphics.fillRect(startX, y + Math.sin(y * 0.01) * 6, endX - startX, 2);
     }
+
+    this.drawTerrainSandTexture(graphics, terrainTopByColumn);
+  }
+
+  private drawTerrainSandTexture(
+    graphics: Phaser.GameObjects.Graphics,
+    terrainTopByColumn: Map<number, number>,
+  ) {
+    const seagrassMidX = BEACH_END_X + (CORAL_END_X - BEACH_END_X) * 0.5;
+    const endX = Math.min(CORAL_END_X + 900, WORLD_WIDTH);
+    const grainColors = [
+      SAND_PALETTE_LIGHT,
+      0xc4aa83,
+      SAND_PALETTE_MID,
+      SAND_PALETTE_DEEP,
+      SAND_PALETTE_DARK,
+      0x2c1a11,
+    ];
+
+    for (let i = 0; i < 8600; i += 1) {
+      const xNoise = this.deterministicUnit(i * 37 + 11, this.caveSeed + 5, 0x51a9);
+      const x = Phaser.Math.Linear(0, endX, xNoise);
+      const floorY = this.smoothedTerrainGuideYAt(x, terrainTopByColumn);
+      const nearSurfaceBias = this.deterministicUnit(i * 19 + 7, this.caveSeed + 13, 0x7a21);
+      const bandDepth = Phaser.Math.Linear(18, x < seagrassMidX ? 300 : 210, this.smooth01(x / Math.max(1, endX)));
+      const y = floorY + 8 + Math.pow(nearSurfaceBias, 1.65) * bandDepth;
+      if (y >= WORLD_HEIGHT - 4) continue;
+
+      const beachToMeadowT = this.smooth01((x - BEACH_END_X * 0.64) / Math.max(1, seagrassMidX - BEACH_END_X * 0.64));
+      const grainNoise = this.deterministicUnit(i * 23 + 3, Math.floor(x / 17), this.caveSeed + 29);
+      const colorIndex = Math.min(
+        grainColors.length - 1,
+        Math.floor((grainNoise * 0.62 + beachToMeadowT * 0.38) * grainColors.length),
+      );
+      const alpha = Phaser.Math.Linear(0.09, 0.24, 1 - nearSurfaceBias) * Phaser.Math.Linear(1, 0.55, beachToMeadowT);
+      const size = grainNoise > 0.82 ? 3 : grainNoise > 0.46 ? 2 : 1;
+      graphics.fillStyle(grainColors[colorIndex], alpha);
+      graphics.fillRect(x, y, size, size);
+    }
+
+    for (let i = 0; i < 1250; i += 1) {
+      const x = Phaser.Math.Linear(
+        BEACH_END_X * 0.2,
+        Math.min(seagrassMidX + 240, WORLD_WIDTH),
+        this.deterministicUnit(i * 61 + 17, this.caveSeed + 41, 0x991d),
+      );
+      const floorY = this.smoothedTerrainGuideYAt(x, terrainTopByColumn);
+      const y = floorY + 10 + Math.pow(this.deterministicUnit(i * 29 + 5, this.caveSeed + 71, 0x4b2d), 1.4) * 180;
+      const color = i % 3 === 0 ? SAND_PALETTE_DARK : i % 3 === 1 ? SAND_PALETTE_DEEP : 0xd0b48b;
+      graphics.fillStyle(color, i % 4 === 0 ? 0.22 : 0.14);
+      graphics.fillRect(x, y, 2 + (i % 3), 1 + (i % 2));
+    }
+  }
+
+  private prepareTerrainGradientTexture() {
+    if (this.textures.exists(TERRAIN_GRADIENT_TEXTURE_KEY)) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = TERRAIN_GRADIENT_TEXTURE_WIDTH;
+    canvas.height = TERRAIN_GRADIENT_TEXTURE_HEIGHT;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const image = context.createImageData(canvas.width, canvas.height);
+    for (let py = 0; py < canvas.height; py += 1) {
+      const worldY = Phaser.Math.Linear(WATERLINE_Y, WORLD_HEIGHT, py / Math.max(1, canvas.height - 1));
+      for (let px = 0; px < canvas.width; px += 1) {
+        const worldX = Phaser.Math.Linear(0, WORLD_WIDTH, px / Math.max(1, canvas.width - 1));
+        const color = Phaser.Display.Color.ValueToColor(this.terrainFillColorAt(worldX, worldY));
+        const index = (py * canvas.width + px) * 4;
+        image.data[index] = color.red;
+        image.data[index + 1] = color.green;
+        image.data[index + 2] = color.blue;
+        image.data[index + 3] = 255;
+      }
+    }
+
+    context.putImageData(image, 0, 0);
+    this.textures.addCanvas(TERRAIN_GRADIENT_TEXTURE_KEY, canvas);
   }
 
   private drawRockStrataRun(
@@ -1076,7 +1873,7 @@ export class OceanScene extends Phaser.Scene {
       const ty = rock.y / TILE;
       const centerX = rock.x + TILE / 2;
       const zone = zoneAtPosition(centerX, rock.y + TILE / 2);
-      const allowedZone = zone.id === "coral" || zone.id === "surface";
+      const allowedZone = this.isShallowGardenZoneId(zone.id) || zone.id === "surface";
       const nearWorldFloor = rock.y <= seafloorYAtX(centerX) + TILE * 1.65;
       const exposedTop = !rockSet.has(`${tx},${ty - 1}`);
       const boundaryClear = this.hasSurfaceRockClearance(rockSet, tx, ty);
@@ -1446,16 +2243,133 @@ export class OceanScene extends Phaser.Scene {
     );
   }
 
-  private createBeachCollision() {
-    const segmentWidth = 64;
-    for (let x = segmentWidth / 2; x <= BEACH_SHELF_END_X + 260; x += segmentWidth) {
-      const top = Math.max(WATERLINE_Y, this.beachShelfYAt(x) - 10);
-      const height = WORLD_HEIGHT - top;
+  private createTerrainSurfaceCollision(terrainTopByColumn: Map<number, number>) {
+    const segmentWidth = 32;
+    for (let x = segmentWidth / 2; x <= WORLD_WIDTH; x += segmentWidth) {
+      const top = this.smoothedTerrainGuideYAt(x, terrainTopByColumn);
+      const height = TILE * 1.4;
       const blocker = this.add
-        .rectangle(x, top + height / 2, segmentWidth + 4, height, 0x000000, 0)
+        .rectangle(x, top + height / 2, segmentWidth + 2, height, 0x000000, 0)
         .setDepth(1000);
       this.rocks.add(blocker);
     }
+  }
+
+  private prepareSeagrassTextures() {
+    for (const variant of SEAGRASS_MEADOW_VARIANTS) {
+      for (const frame of variant.frames) {
+        this.textures.get(frame.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+  }
+
+  private createSeagrassMeadows(zones: OceanZone[]) {
+    const meadowZone = zones.find((zone) => zone.id === "coral");
+    const kelpZone = zones.find((zone) => zone.id === "kelp");
+    if (!meadowZone || this.terrainTopByColumn.size === 0) return;
+
+    this.seagrassFrameTimer?.remove(false);
+    this.seagrassFrameTimer = undefined;
+    this.seagrassFrameIndex = 0;
+    this.seagrassMeadow.forEach(({ sprite }) => sprite.destroy());
+    this.seagrassMeadow = [];
+
+    const startX = meadowZone.startX + 260;
+    const kelpFadeEndX = kelpZone ? meadowZone.endX + (kelpZone.endX - meadowZone.endX) * 0.5 : meadowZone.endX;
+    const endX = kelpFadeEndX - 140;
+    const fadeStartX = meadowZone.endX;
+    const fadeEndX = kelpFadeEndX;
+    const rowOffsets = [8, 11, 14, 17];
+    const rowScales = [0.44, 0.56, 0.68, 0.82];
+    const rowDepths = [-4.42, -4.18, -3.94, -3.68];
+    const rowSpacing = 9;
+
+    for (let row = 0; row < SEAGRASS_MEADOW_ROW_COUNT; row += 1) {
+      const spacing = rowSpacing - row;
+      for (let column = 0, x = startX + row * 17; x <= endX; column += 1) {
+        const noise = this.deterministicUnit(row * 71 + column * 19, Math.floor(x / 13), this.caveSeed + 11);
+        const patchWave = Math.sin(x * 0.0031 + row * 1.4) * 0.5 + Math.sin(x * 0.0077 + 1.8) * 0.5;
+        const jitter = (this.deterministicUnit(column + 17, row + 31, this.caveSeed + 37) - 0.5) * spacing * 0.7;
+        const tuftX = Phaser.Math.Clamp(x + jitter, startX, endX);
+        const floorY = this.smoothedTerrainGuideYAt(tuftX, this.terrainTopByColumn);
+        const terrainRotation = this.terrainGuideRotationAt(tuftX, this.terrainTopByColumn);
+        const steepThreshold = Phaser.Math.DegToRad(SEAGRASS_STEEP_SLOPE_MIN_DEGREES);
+        const terrainSlopeAngle = Math.abs(this.terrainGuideSlopeAngleAt(tuftX, this.terrainTopByColumn));
+        const steepT = this.smooth01(
+          (terrainSlopeAngle - steepThreshold) / Math.max(0.01, Phaser.Math.DegToRad(75) - steepThreshold),
+        );
+        x += spacing * Phaser.Math.Linear(1, SEAGRASS_STEEP_SLOPE_MIN_SPACING_FACTOR, steepT);
+        const kelpFade = tuftX <= fadeStartX ? 1 : 1 - this.smooth01((tuftX - fadeStartX) / Math.max(1, fadeEndX - fadeStartX));
+        const density =
+          Phaser.Math.Clamp(0.7 + patchWave * 0.18, 0.42, 0.86) *
+          SEAGRASS_MEADOW_DENSITY_FACTOR *
+          Phaser.Math.Linear(1, SEAGRASS_STEEP_SLOPE_MAX_DENSITY_MULTIPLIER, steepT) *
+          kelpFade;
+        if (noise > Math.min(0.96, density)) continue;
+
+        const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+        const variantIndex = Math.floor(
+          this.deterministicUnit(column + 101, row + 59, this.caveSeed + 73) * SEAGRASS_MEADOW_VARIANTS.length,
+        ) % SEAGRASS_MEADOW_VARIANTS.length;
+        const variant = SEAGRASS_MEADOW_VARIANTS[variantIndex];
+        const scaleJitter = Phaser.Math.Linear(
+          0.86,
+          1.18,
+          this.deterministicUnit(column + 211, row + 83, this.caveSeed + 97),
+        );
+        const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
+        const alpha = Phaser.Math.Clamp(0.92 - row * 0.045 - depthT * 0.18, 0.62, 0.94);
+        const yJitter = (this.deterministicUnit(column + 13, row + 7, this.caveSeed + 5) - 0.5) * 4;
+        const sprite = this.add
+          .sprite(tuftX, floorY + rowOffsets[row] + yJitter, variant.frames[0].key)
+          .setOrigin(0.5, 1)
+          .setScale(rowScales[row] * scaleJitter * depthScale * SEAGRASS_MEADOW_SCALE_FACTOR)
+          .setRotation(terrainRotation)
+          .setDepth(rowDepths[row] + row * 0.01 + column * 0.00002)
+          .setAlpha(alpha)
+          .setTint(this.seagrassTintAt(tuftX, floorY, row));
+
+        this.seagrassMeadow.push({ sprite, frames: variant.frames });
+      }
+    }
+
+    this.setSeagrassFrame(this.seagrassFrameIndex);
+    this.scheduleNextSeagrassFrame();
+  }
+
+  private scheduleNextSeagrassFrame() {
+    if (this.seagrassMeadow.length === 0) return;
+    const delay = Phaser.Math.Between(
+      SEAGRASS_MEADOW_TRANSITION_MIN_DELAY,
+      SEAGRASS_MEADOW_TRANSITION_MAX_DELAY,
+    );
+    this.seagrassFrameTimer = this.time.delayedCall(delay, () => this.advanceSeagrassFrame());
+  }
+
+  private advanceSeagrassFrame() {
+    if (this.seagrassMeadow.length === 0) return;
+    const frameCount = this.seagrassMeadow[0]?.frames.length ?? 1;
+    this.seagrassFrameIndex = (this.seagrassFrameIndex + 1) % frameCount;
+    this.setSeagrassFrame(this.seagrassFrameIndex);
+    this.scheduleNextSeagrassFrame();
+  }
+
+  private setSeagrassFrame(frameIndex: number) {
+    for (const tuft of this.seagrassMeadow) {
+      const frame = tuft.frames[frameIndex] ?? tuft.frames[0];
+      tuft.sprite.setTexture(frame.key);
+    }
+  }
+
+  private seagrassTintAt(x: number, y: number, row: number) {
+    const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const rowT = row / Math.max(1, SEAGRASS_MEADOW_ROW_COUNT - 1);
+    const base = rowT < 0.5 ? 0xbaff74 : 0x92f052;
+    const deep = rowT < 0.5 ? 0x5fcb7e : 0x43b86c;
+    const local = this.deterministicUnit(Math.floor(x / 23), Math.floor(y / 17), row + 19);
+    const tint = this.mixHexColor(base, deep, Phaser.Math.Clamp(depthT * 0.72 + local * 0.16, 0, 1));
+
+    return this.mixHexColor(tint, 0xffffff, rowT * 0.1);
   }
 
   private createDecorations(decorations: Decoration[]) {
@@ -1475,33 +2389,401 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private createCreatures(
-    creatures: { x: number; y: number; assetKey: CreatureKey; drift: number; scale: number }[],
-  ) {
+  private createCreatures(creatures: Array<{
+    x: number;
+    y: number;
+    assetKey: CreatureKey;
+    drift: number;
+    scale: number;
+    schoolId?: number;
+    schoolOffsetX?: number;
+    schoolOffsetY?: number;
+  }>) {
+    const yellowBlueFishSchools = new Map<number, {
+      motion: { x: number; y: number };
+      drift: number;
+      members: Array<{
+        sprite: Phaser.GameObjects.Sprite;
+        offsetX: number;
+        offsetY: number;
+      }>;
+    }>();
+
     for (const spawn of creatures) {
       const asset = NPC_CREATURES.find((creature) => creature.key === spawn.assetKey);
       if (!asset) continue;
-      const sprite = this.add
-        .image(spawn.x, spawn.y, asset.key)
+      const sprite =
+        spawn.assetKey === "yellow-blue-fish"
+          ? this.add.sprite(spawn.x, spawn.y, CREATURES.yellowBlueFish.frames.tailRight.key)
+          : this.add.image(spawn.x, spawn.y, asset.key);
+
+      sprite
         .setOrigin(0.5, this.creatureOriginY(spawn.assetKey))
-        .setScale(spawn.scale)
+        .setScale(this.creatureRenderScale(sprite, spawn.assetKey, spawn.scale))
         .setDepth(4)
         .setAlpha(0.94);
 
+      if (spawn.assetKey === "yellow-blue-fish" && sprite instanceof Phaser.GameObjects.Sprite) {
+        sprite.play({
+          key: YELLOW_BLUE_FISH_SWIM_KEY,
+          startFrame: Math.floor(Math.random() * 4),
+        });
+      }
+
       this.faceSprite(sprite, spawn.assetKey, 1);
 
-      this.tweens.add({
-        targets: sprite,
-        x: spawn.x + spawn.drift,
-        y: spawn.y + Math.sin(spawn.x) * 16,
-        duration: 2600 + spawn.drift * 45,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
-        onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
-        onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
-      });
+      if (spawn.assetKey === "yellow-blue-fish" && sprite instanceof Phaser.GameObjects.Sprite) {
+        const schoolId = spawn.schoolId ?? Math.floor(spawn.x);
+        const offsetX = spawn.schoolOffsetX ?? 0;
+        const offsetY = spawn.schoolOffsetY ?? 0;
+        const school = yellowBlueFishSchools.get(schoolId) ?? {
+          motion: { x: spawn.x - offsetX, y: spawn.y - offsetY },
+          drift: spawn.drift,
+          members: [],
+        };
+        school.drift = Math.max(school.drift, spawn.drift);
+        school.members.push({ sprite, offsetX, offsetY });
+        yellowBlueFishSchools.set(schoolId, school);
+        continue;
+      }
+
+      if (this.isTerrainFollowingCreature(spawn.assetKey)) {
+        this.addTerrainFollowingCreatureTween(sprite, spawn);
+      } else if (spawn.assetKey === "crayfish") {
+        this.addCaveFloorCreatureTween(sprite, spawn);
+      } else {
+        this.addSwimmingCreatureTween(sprite, spawn);
+      }
     }
+
+    for (const school of yellowBlueFishSchools.values()) {
+      this.addYellowBlueFishSchoolTween(school);
+    }
+  }
+
+  private createCreatureAnimations() {
+    if (this.anims.exists(YELLOW_BLUE_FISH_SWIM_KEY)) return;
+    this.anims.create({
+      key: YELLOW_BLUE_FISH_SWIM_KEY,
+      frames: [
+        { key: CREATURES.yellowBlueFish.frames.tailRight.key },
+        { key: CREATURES.yellowBlueFish.frames.center.key },
+        { key: CREATURES.yellowBlueFish.frames.tailLeft.key },
+        { key: CREATURES.yellowBlueFish.frames.center.key },
+      ],
+      frameRate: 8,
+      repeat: -1,
+    });
+  }
+
+  private addYellowBlueFishSchoolTween(school: {
+    motion: { x: number; y: number };
+    drift: number;
+    members: Array<{
+      sprite: Phaser.GameObjects.Sprite;
+      offsetX: number;
+      offsetY: number;
+    }>;
+  }) {
+    const memberMotion = school.members.map((member) => ({
+      ...member,
+      x: member.offsetX,
+      y: member.offsetY,
+      targetX: member.offsetX,
+      targetY: member.offsetY,
+      phase: Math.random() * Math.PI * 2,
+      response: 0.8 + Math.random() * 1.4,
+      nextRetarget: 0,
+    }));
+    const schoolMarginX = Math.max(80, ...memberMotion.map((member) => Math.abs(member.offsetX) + 34));
+    const schoolMarginY = Math.max(36, ...memberMotion.map((member) => Math.abs(member.offsetY) + 26));
+    const memberBoundaryX = Math.max(190, schoolMarginX + 110);
+    const memberSurfaceGap = Math.max(130, schoolMarginY + 92);
+    const safeCorridor = this.yellowBlueFishSafeCorridor(schoolMarginX, schoolMarginY);
+    let lastUpdateTime = this.time.now;
+
+    const updateMembers = (directionX: -1 | 1) => {
+      const now = this.time.now;
+      const seconds = Math.min((now - lastUpdateTime) / 1000, 0.08);
+      lastUpdateTime = now;
+
+      for (const member of memberMotion) {
+        if (now >= member.nextRetarget) {
+          member.targetX = Phaser.Math.Clamp(member.offsetX + Phaser.Math.Between(-14, 14), member.offsetX - 22, member.offsetX + 22);
+          member.targetY = Phaser.Math.Clamp(member.offsetY + Phaser.Math.Between(-8, 8), member.offsetY - 13, member.offsetY + 13);
+          member.response = 0.75 + Math.random() * 1.65;
+          member.nextRetarget = now + 900 + Math.random() * 1800;
+        }
+
+        const pulseX = Math.sin(now * 0.0012 + member.phase) * 5;
+        const pulseY = Math.cos(now * 0.0015 + member.phase * 1.7) * 3;
+        const response = 1 - Math.exp(-seconds * member.response);
+        member.x = Phaser.Math.Linear(member.x, member.targetX + pulseX, response);
+        member.y = Phaser.Math.Linear(member.y, member.targetY + pulseY, response);
+        const memberX = Phaser.Math.Clamp(
+          school.motion.x + member.x,
+          safeCorridor.minX + Math.max(0, memberBoundaryX - safeCorridor.marginX),
+          safeCorridor.maxX - Math.max(0, memberBoundaryX - safeCorridor.marginX),
+        );
+        const memberYRange = this.yellowBlueFishSafeYRangeAt(memberX, safeCorridor);
+        const memberY = Phaser.Math.Clamp(
+          school.motion.y + member.y,
+          Math.max(memberYRange.minY, WATERLINE_Y + memberSurfaceGap),
+          memberYRange.maxY,
+        );
+        member.sprite.setPosition(memberX, memberY);
+        this.faceSprite(member.sprite, "yellow-blue-fish", directionX);
+      }
+    };
+
+    const swimNext = () => {
+      const start = this.yellowBlueFishSafeSchoolPoint(school.motion.x, school.motion.y, safeCorridor);
+      school.motion.x = start.x;
+      school.motion.y = start.y;
+      const path = this.yellowBlueFishSchoolPath(start, safeCorridor);
+      const { target, lateralAmplitude, phase, cycles } = path;
+      const directionX: -1 | 1 = target.x >= school.motion.x ? 1 : -1;
+      const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+      const speedFactor = 2 + Math.random() * 3;
+      const pixelsPerSecond = speedFactor * 38;
+      const progress = { value: 0 };
+      updateMembers(directionX);
+
+      this.tweens.add({
+        targets: progress,
+        value: 1,
+        duration: Phaser.Math.Clamp((distance / pixelsPerSecond) * 1000, 4500, 28000),
+        ease: "Sine.inOut",
+        onUpdate: () => {
+          const point = this.yellowBlueFishLinearTrackPoint(
+            start,
+            target,
+            progress.value,
+            lateralAmplitude,
+            cycles,
+            phase,
+          );
+          const safePoint = this.yellowBlueFishSafeSchoolPoint(point.x, point.y, safeCorridor);
+          school.motion.x = safePoint.x;
+          school.motion.y = safePoint.y;
+          updateMembers(directionX);
+        },
+        onComplete: swimNext,
+      });
+    };
+
+    updateMembers(1);
+    this.time.delayedCall(Math.random() * 900, swimNext);
+  }
+
+  private yellowBlueFishSafeCorridor(schoolMarginX: number, schoolMarginY: number) {
+    const marginX = Math.max(920, schoolMarginX + 320);
+    const marginTop = Math.max(230, schoolMarginY + 185);
+    const marginBottom = Math.max(260, schoolMarginY + 210);
+    const minX = BEACH_END_X + marginX;
+    const maxX = KELP_END_X - marginX;
+    const minY = WATERLINE_Y + marginTop;
+    const maxY = WATERLINE_Y + 820;
+
+    return { minX, maxX, minY, maxY, marginX, marginBottom };
+  }
+
+  private yellowBlueFishSchoolPath(
+    start: { x: number; y: number },
+    corridor: { minX: number; maxX: number; minY: number; maxY: number; marginBottom: number },
+  ) {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const target = this.yellowBlueFishSchoolTarget(start.x, start.y, corridor);
+      const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+      const lateralAmplitude = Phaser.Math.Clamp(distance * 0.025, 8, 38);
+      const phase = Math.random() * Math.PI * 2;
+      const cycles = 0.45 + Math.random() * 0.45;
+      if (this.yellowBlueFishTrackIsSafe(start, target, corridor, lateralAmplitude, cycles, phase)) {
+        return { target, lateralAmplitude, phase, cycles };
+      }
+    }
+
+    const fallback = this.yellowBlueFishSafeSchoolPoint(
+      start.x + (Math.random() > 0.5 ? 220 : -220),
+      start.y + Phaser.Math.Between(-60, 60),
+      corridor,
+    );
+    return {
+      target: fallback,
+      lateralAmplitude: 8,
+      phase: Math.random() * Math.PI * 2,
+      cycles: 0.45,
+    };
+  }
+
+  private yellowBlueFishSchoolTarget(
+    currentX: number,
+    currentY: number,
+    corridor: { minX: number; maxX: number; minY: number; maxY: number; marginBottom: number },
+  ) {
+    const direction = Math.random() > 0.5 ? 1 : -1;
+    let x = currentX;
+    for (let attempt = 0; attempt < 8 && Math.abs(x - currentX) < 100; attempt += 1) {
+      const nextDirection = attempt % 2 === 0 ? direction : -direction;
+      x = Phaser.Math.Clamp(currentX + nextDirection * Phaser.Math.Between(100, 2000), corridor.minX, corridor.maxX);
+    }
+    if (Math.abs(x - currentX) < 100) x = Phaser.Math.Between(corridor.minX, corridor.maxX);
+
+    const yRange = this.yellowBlueFishSafeYRangeAt(x, corridor);
+    const localMinY = Math.max(yRange.minY, currentY - 140);
+    const localMaxY = Math.min(yRange.maxY, currentY + 140);
+    const y = localMaxY > localMinY
+      ? Phaser.Math.Between(localMinY, localMaxY)
+      : Phaser.Math.Between(yRange.minY, yRange.maxY);
+
+    return { x, y };
+  }
+
+  private yellowBlueFishSafeSchoolPoint(
+    x: number,
+    y: number,
+    corridor: { minX: number; maxX: number; minY: number; maxY: number; marginBottom: number },
+  ) {
+    const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
+    const yRange = this.yellowBlueFishSafeYRangeAt(safeX, corridor);
+    return {
+      x: safeX,
+      y: Phaser.Math.Clamp(y, yRange.minY, yRange.maxY),
+    };
+  }
+
+  private yellowBlueFishSafeYRangeAt(
+    x: number,
+    corridor: { minY: number; maxY: number; marginBottom: number },
+  ) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const minY = corridor.minY;
+    const maxY = Math.min(corridor.maxY, floorY - corridor.marginBottom);
+    return { minY, maxY: Math.max(minY + 80, maxY) };
+  }
+
+  private yellowBlueFishTrackIsSafe(
+    start: { x: number; y: number },
+    target: { x: number; y: number },
+    corridor: { minX: number; maxX: number; minY: number; maxY: number; marginBottom: number },
+    lateralAmplitude: number,
+    cycles: number,
+    phase: number,
+  ) {
+    for (let step = 0; step <= 18; step += 1) {
+      const point = this.yellowBlueFishLinearTrackPoint(
+        start,
+        target,
+        step / 18,
+        lateralAmplitude,
+        cycles,
+        phase,
+      );
+      if (point.x < corridor.minX || point.x > corridor.maxX) return false;
+      const yRange = this.yellowBlueFishSafeYRangeAt(point.x, corridor);
+      if (point.y < yRange.minY || point.y > yRange.maxY) return false;
+    }
+    return true;
+  }
+
+  private yellowBlueFishLinearTrackPoint(
+    start: { x: number; y: number },
+    target: { x: number; y: number },
+    t: number,
+    lateralAmplitude: number,
+    cycles: number,
+    phase: number,
+  ) {
+    const x = Phaser.Math.Linear(start.x, target.x, t);
+    const y = Phaser.Math.Linear(start.y, target.y, t);
+    const dx = target.x - start.x;
+    const dy = target.y - start.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / length;
+    const normalY = dx / length;
+    const lateral = Math.sin(t * Math.PI * 2 * cycles + phase) * lateralAmplitude * Math.sin(t * Math.PI);
+
+    return {
+      x: x + normalX * lateral,
+      y: y + normalY * lateral,
+    };
+  }
+
+  private creatureRenderScale(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    assetKey: CreatureKey,
+    relativeScale: number,
+  ) {
+    if (assetKey === "yellow-blue-fish") return (YELLOW_BLUE_FISH_BASE_WIDTH / sprite.width) * relativeScale;
+    return relativeScale;
+  }
+
+  private addTerrainFollowingCreatureTween(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
+  ) {
+    const motion = { offset: -spawn.drift };
+    sprite.setPosition(spawn.x + motion.offset, this.creatureTerrainBoundaryYAt(spawn.x + motion.offset));
+    this.faceSprite(sprite, spawn.assetKey, 1);
+
+    this.tweens.add({
+      targets: motion,
+      offset: spawn.drift,
+      duration: 3200 + spawn.drift * 38,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+      onUpdate: () => {
+        const x = spawn.x + motion.offset;
+        sprite.setPosition(x, this.creatureTerrainBoundaryYAt(x));
+      },
+      onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
+      onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
+    });
+  }
+
+  private addCaveFloorCreatureTween(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
+  ) {
+    this.tweens.add({
+      targets: sprite,
+      x: spawn.x + spawn.drift * 0.62,
+      duration: 3600 + spawn.drift * 42,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+      onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
+      onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
+    });
+  }
+
+  private addSwimmingCreatureTween(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
+  ) {
+    this.tweens.add({
+      targets: sprite,
+      x: spawn.x + spawn.drift,
+      y: spawn.y + Math.sin(spawn.x) * 16,
+      duration: 2600 + spawn.drift * 45,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+      onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
+      onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
+    });
+  }
+
+  private isTerrainFollowingCreature(assetKey: CreatureKey) {
+    return assetKey === "nudhhi" || assetKey === "smooth-sting-ray";
+  }
+
+  private creatureTerrainBoundaryYAt(x: number) {
+    if (this.terrainTopByColumn.size === 0) return seafloorYAtX(x);
+    return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn) + 2;
   }
 
   private creatureOriginY(assetKey: CreatureKey) {
@@ -1538,12 +2820,12 @@ export class OceanScene extends Phaser.Scene {
     const spawnX = BEACH_END_X + 420;
     const spawnY = Math.max(WATERLINE_Y + 74, this.beachShelfYAt(spawnX) - 150);
     this.hero = this.physics.add
-      .sprite(spawnX, spawnY, CREATURES.hero.key)
-      .setScale(0.72)
-      .setDepth(20)
+      .sprite(spawnX, spawnY, CREATURES.hero.frames.center.key)
+      .setScale(HERO_RENDER_WIDTH / this.textures.get(CREATURES.hero.frames.center.key).getSourceImage().width)
+      .setDepth(HERO_VISIBLE_DEPTH)
       .setDamping(true)
       .setDrag(0.9, 0.9)
-      .setMaxVelocity(360, 640)
+      .setMaxVelocity(HERO_MAX_VELOCITY_X, HERO_MAX_VELOCITY_Y)
       .setCollideWorldBounds(true);
 
     this.hero.body?.setSize(92, 36, true);
@@ -1558,6 +2840,210 @@ export class OceanScene extends Phaser.Scene {
       up: Phaser.Input.Keyboard.KeyCodes.W,
       down: Phaser.Input.Keyboard.KeyCodes.S,
     }) as KeySet;
+    this.createTouchControls();
+  }
+
+  private createTouchControls() {
+    const root = document.getElementById("touch-controls");
+    const joystick = document.getElementById("touch-joystick");
+    const knob = document.getElementById("touch-joystick-knob");
+    if (!(root instanceof HTMLElement) || !(joystick instanceof HTMLElement) || !(knob instanceof HTMLElement)) return;
+
+    this.touchJoystickElements = { root, joystick, knob };
+
+    root.onpointerdown = (event) => {
+      event.preventDefault();
+      root.setPointerCapture(event.pointerId);
+      if (this.devCameraEnabled) {
+        this.handleDeveloperTouchStart(event);
+        return;
+      }
+      if (this.touchJoystickPointerId !== undefined) return;
+      this.touchJoystickPointerId = event.pointerId;
+      this.touchJoystickOrigin = { x: event.clientX, y: event.clientY };
+      joystick.style.left = `${event.clientX}px`;
+      joystick.style.top = `${event.clientY}px`;
+      root.classList.add("is-active");
+      this.updateTouchJoystick(event);
+    };
+
+    root.onpointermove = (event) => {
+      if (this.devCameraEnabled) {
+        event.preventDefault();
+        this.handleDeveloperTouchMove(event);
+        return;
+      }
+      if (event.pointerId !== this.touchJoystickPointerId) return;
+      event.preventDefault();
+      this.updateTouchJoystick(event);
+    };
+
+    root.onpointerup = (event) => {
+      if (this.devCameraEnabled) {
+        event.preventDefault();
+        this.handleDeveloperTouchEnd(event);
+        return;
+      }
+      if (event.pointerId !== this.touchJoystickPointerId) return;
+      event.preventDefault();
+      this.clearTouchInput();
+    };
+
+    root.onpointercancel = (event) => {
+      if (this.devCameraEnabled) {
+        event.preventDefault();
+        this.handleDeveloperTouchEnd(event);
+        return;
+      }
+      if (event.pointerId !== this.touchJoystickPointerId) return;
+      event.preventDefault();
+      this.clearTouchInput();
+    };
+
+    root.onwheel = (event) => {
+      if (!this.devCameraEnabled) return;
+      event.preventDefault();
+      const multiplier = event.deltaY < 0 ? 1.12 : 0.88;
+      this.zoomDeveloperCameraAtScreenPoint(event.clientX, event.clientY, multiplier);
+    };
+
+    root.oncontextmenu = (event) => event.preventDefault();
+  }
+
+  private updateTouchJoystick(event: PointerEvent) {
+    if (!this.touchJoystickElements) return;
+    const radius = 52;
+    const dx = event.clientX - this.touchJoystickOrigin.x;
+    const dy = event.clientY - this.touchJoystickOrigin.y;
+    const length = Math.hypot(dx, dy);
+    const scale = length > radius ? radius / length : 1;
+    const knobX = dx * scale;
+    const knobY = dy * scale;
+    const deadzone = 0.16;
+    const normalizedX = knobX / radius;
+    const normalizedY = knobY / radius;
+
+    this.touchInput.x = Math.abs(normalizedX) < deadzone ? 0 : normalizedX;
+    this.touchInput.y = Math.abs(normalizedY) < deadzone ? 0 : normalizedY;
+    this.touchJoystickElements.knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+  }
+
+  private clearTouchInput() {
+    this.touchInput.x = 0;
+    this.touchInput.y = 0;
+    this.touchJoystickPointerId = undefined;
+    if (!this.touchJoystickElements) return;
+    this.touchJoystickElements.root.classList.remove("is-active");
+    this.touchJoystickElements.knob.style.transform = "translate(-50%, -50%)";
+  }
+
+  private handleDeveloperTouchStart(event: PointerEvent) {
+    this.clearTouchInput();
+    this.devCameraDragging = false;
+    this.devCameraDragStart = undefined;
+    this.devTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    this.resetDeveloperTouchGesture();
+  }
+
+  private handleDeveloperTouchMove(event: PointerEvent) {
+    if (!this.devTouchPointers.has(event.pointerId)) return;
+    this.devTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pointers = Array.from(this.devTouchPointers.values());
+    const camera = this.cameras.main;
+
+    if (pointers.length >= 2) {
+      const current = this.developerTouchMetrics(pointers[0], pointers[1]);
+      if (!this.devTouchStart || this.devTouchStart.distance <= 0) {
+        this.devTouchStart = {
+          centerX: current.centerX,
+          centerY: current.centerY,
+          distance: current.distance,
+          zoom: camera.zoom,
+          scrollX: camera.scrollX,
+          scrollY: camera.scrollY,
+        };
+        return;
+      }
+
+      const zoomMultiplier = current.distance / this.devTouchStart.distance;
+      this.setDeveloperZoom(this.devTouchStart.zoom * zoomMultiplier);
+      camera.scrollX = this.devTouchStart.scrollX - (current.centerX - this.devTouchStart.centerX) / camera.zoom;
+      camera.scrollY = this.devTouchStart.scrollY - (current.centerY - this.devTouchStart.centerY) / camera.zoom;
+      this.clampDeveloperCamera();
+      this.updateDeveloperToolReadout();
+      return;
+    }
+
+    const pointer = pointers[0];
+    if (!pointer) return;
+    if (!this.devTouchStart) {
+      this.devTouchStart = {
+        centerX: pointer.x,
+        centerY: pointer.y,
+        distance: 0,
+        zoom: camera.zoom,
+        scrollX: camera.scrollX,
+        scrollY: camera.scrollY,
+      };
+      return;
+    }
+
+    camera.scrollX = this.devTouchStart.scrollX - (pointer.x - this.devTouchStart.centerX) / camera.zoom;
+    camera.scrollY = this.devTouchStart.scrollY - (pointer.y - this.devTouchStart.centerY) / camera.zoom;
+    this.clampDeveloperCamera();
+    this.updateDeveloperToolReadout();
+  }
+
+  private handleDeveloperTouchEnd(event: PointerEvent) {
+    this.devTouchPointers.delete(event.pointerId);
+    this.resetDeveloperTouchGesture();
+  }
+
+  private resetDeveloperTouchGesture() {
+    const pointers = Array.from(this.devTouchPointers.values());
+    const camera = this.cameras.main;
+    if (pointers.length >= 2) {
+      const current = this.developerTouchMetrics(pointers[0], pointers[1]);
+      this.devTouchStart = {
+        centerX: current.centerX,
+        centerY: current.centerY,
+        distance: current.distance,
+        zoom: camera.zoom,
+        scrollX: camera.scrollX,
+        scrollY: camera.scrollY,
+      };
+    } else if (pointers.length === 1) {
+      this.devTouchStart = {
+        centerX: pointers[0].x,
+        centerY: pointers[0].y,
+        distance: 0,
+        zoom: camera.zoom,
+        scrollX: camera.scrollX,
+        scrollY: camera.scrollY,
+      };
+    } else {
+      this.devTouchStart = undefined;
+    }
+  }
+
+  private developerTouchMetrics(
+    first: { x: number; y: number },
+    second: { x: number; y: number },
+  ) {
+    return {
+      centerX: (first.x + second.x) / 2,
+      centerY: (first.y + second.y) / 2,
+      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+    };
+  }
+
+  private isControlDown(control: TouchControl) {
+    const threshold = 0.24;
+    if (this.cursors[control].isDown || this.keys[control].isDown) return true;
+    if (control === "left") return this.touchInput.x < -threshold;
+    if (control === "right") return this.touchInput.x > threshold;
+    if (control === "up") return this.touchInput.y < -threshold;
+    return this.touchInput.y > threshold;
   }
 
   private createDeveloperTools() {
@@ -1567,6 +3053,7 @@ export class OceanScene extends Phaser.Scene {
     const zoomOut = document.getElementById("dev-zoom-out");
     const fit = document.getElementById("dev-fit");
     const player = document.getElementById("dev-player");
+    const teleport = document.getElementById("dev-teleport");
     const xRange = document.getElementById("dev-x-range");
     const yRange = document.getElementById("dev-y-range");
     const seedInput = document.getElementById("cave-seed-input");
@@ -1581,6 +3068,7 @@ export class OceanScene extends Phaser.Scene {
       !(zoomOut instanceof HTMLButtonElement) ||
       !(fit instanceof HTMLButtonElement) ||
       !(player instanceof HTMLButtonElement) ||
+      !(teleport instanceof HTMLButtonElement) ||
       !(xRange instanceof HTMLInputElement) ||
       !(yRange instanceof HTMLInputElement) ||
       !(seedInput instanceof HTMLInputElement) ||
@@ -1594,7 +3082,7 @@ export class OceanScene extends Phaser.Scene {
     xRange.max = String(WORLD_WIDTH);
     yRange.max = String(WORLD_HEIGHT);
     seedInput.value = String(this.caveSeed);
-    this.devCameraTools = { root, toggle, zoomIn, zoomOut, fit, player, xRange, yRange, seedInput, seedApply, seedRandom, readout };
+    this.devCameraTools = { root, toggle, zoomIn, zoomOut, fit, player, teleport, xRange, yRange, seedInput, seedApply, seedRandom, readout };
 
     toggle.onclick = () => this.setDeveloperCameraEnabled(!this.devCameraEnabled);
     zoomIn.onclick = () => {
@@ -1610,6 +3098,12 @@ export class OceanScene extends Phaser.Scene {
       this.fitDeveloperCameraToWorld();
     };
     player.onclick = () => this.setDeveloperCameraEnabled(false);
+    teleport.onclick = () => {
+      this.setDeveloperCameraEnabled(true);
+      const center = this.getDeveloperCameraCenter();
+      this.teleportHeroTo(center.x, center.y);
+      this.centerDeveloperCamera(this.hero.x, this.hero.y);
+    };
     xRange.oninput = () => {
       this.setDeveloperCameraEnabled(true);
       this.centerDeveloperCamera(Number(xRange.value), this.getDeveloperCameraCenter().y);
@@ -1674,6 +3168,9 @@ export class OceanScene extends Phaser.Scene {
     this.devCameraEnabled = enabled;
     this.devCameraDragging = false;
     this.devCameraDragStart = undefined;
+    this.devTouchPointers.clear();
+    this.devTouchStart = undefined;
+    this.clearTouchInput();
 
     if (enabled) {
       camera.stopFollow();
@@ -1684,8 +3181,8 @@ export class OceanScene extends Phaser.Scene {
       camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
       camera.setZoom(1);
       camera.centerOn(this.hero.x, this.hero.y);
-      camera.startFollow(this.hero, true, 0.08, 0.08);
-      camera.setDeadzone(160, 96);
+      camera.startFollow(this.hero, true, 0.055, 0.055);
+      camera.setDeadzone(190, 118);
     }
 
     this.updateDeveloperToolState();
@@ -1727,18 +3224,38 @@ export class OceanScene extends Phaser.Scene {
     if (!this.devCameraTools) return;
     this.devCameraTools.root.classList.toggle("is-active", this.devCameraEnabled);
     this.devCameraTools.toggle.setAttribute("aria-pressed", String(this.devCameraEnabled));
+    this.touchJoystickElements?.root.classList.toggle("dev-nav", this.devCameraEnabled);
+    this.terrainGuideLayer?.setVisible(this.devCameraEnabled);
     this.updateCaveVisibility();
   }
 
   private updateDeveloperToolReadout() {
     if (!this.devCameraTools) return;
+    this.updateHeroVisibilityStatus();
     const center = this.getDeveloperCameraCenter();
     const camera = this.cameras.main;
     const centerX = Math.round(Phaser.Math.Clamp(center.x, 0, WORLD_WIDTH));
     const centerY = Math.round(Phaser.Math.Clamp(center.y, 0, WORLD_HEIGHT));
     this.devCameraTools.xRange.value = String(centerX);
     this.devCameraTools.yRange.value = String(centerY);
-    this.devCameraTools.readout.textContent = `x ${centerX} y ${centerY} z ${camera.zoom.toFixed(2)}`;
+    this.devCameraTools.readout.textContent = `x ${centerX} y ${centerY} z ${camera.zoom.toFixed(2)} vis ${this.heroVisibilityStatus}`;
+  }
+
+  private teleportHeroTo(x: number, y: number) {
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    const safeX = Phaser.Math.Clamp(x, 32, WORLD_WIDTH - 32);
+    const safeY = Phaser.Math.Clamp(y, WATERLINE_Y + 8, WORLD_HEIGHT - 64);
+    this.hero.setPosition(safeX, safeY);
+    body.reset(safeX, safeY);
+    body.setVelocity(0, 0);
+    body.setAcceleration(0, 0);
+    this.isSurfaceJumping = false;
+    this.lastJumpPressed = false;
+    this.clearTouchInput();
+    this.updateHeroPresentation();
+    this.updateHud();
+    this.updateLighting();
+    this.updateDeveloperToolReadout();
   }
 
   private zoomDeveloperCamera(multiplier: number) {
@@ -1748,12 +3265,16 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private zoomDeveloperCameraAt(pointer: Phaser.Input.Pointer, multiplier: number) {
+    this.zoomDeveloperCameraAtScreenPoint(pointer.x, pointer.y, multiplier);
+  }
+
+  private zoomDeveloperCameraAtScreenPoint(screenX: number, screenY: number, multiplier: number) {
     const camera = this.cameras.main;
-    const before = camera.getWorldPoint(pointer.x, pointer.y);
+    const before = camera.getWorldPoint(screenX, screenY);
     this.setDeveloperZoom(camera.zoom * multiplier);
     this.centerDeveloperCamera(
-      before.x - (pointer.x - camera.width / 2) / camera.zoom,
-      before.y - (pointer.y - camera.height / 2) / camera.zoom,
+      before.x - (screenX - camera.width / 2) / camera.zoom,
+      before.y - (screenY - camera.height / 2) / camera.zoom,
     );
   }
 
@@ -1820,40 +3341,72 @@ export class OceanScene extends Phaser.Scene {
     this.lightingOverlay = this.add.graphics().setDepth(5000).setScrollFactor(0);
   }
 
-  private handleInput() {
+  private handleInput(delta: number) {
     const body = this.hero.body as Phaser.Physics.Arcade.Body;
     if (this.devCameraEnabled) {
       body.setAcceleration(0);
       this.lastJumpPressed = false;
+      this.surfaceJumpHoldConsumed = false;
+      this.clearTouchInput();
       return;
     }
 
-    const left = this.cursors.left.isDown || this.keys.left.isDown;
-    const right = this.cursors.right.isDown || this.keys.right.isDown;
-    const up = this.cursors.up.isDown || this.keys.up.isDown;
-    const down = this.cursors.down.isDown || this.keys.down.isDown;
-    const acceleration = 760;
+    const keyboardLeft = this.cursors.left.isDown || this.keys.left.isDown;
+    const keyboardRight = this.cursors.right.isDown || this.keys.right.isDown;
+    const keyboardUp = this.cursors.up.isDown || this.keys.up.isDown;
+    const keyboardDown = this.cursors.down.isDown || this.keys.down.isDown;
+    const left = keyboardLeft || this.isControlDown("left");
+    const right = keyboardRight || this.isControlDown("right");
+    const up = keyboardUp || this.isControlDown("up");
+    const down = keyboardDown || this.isControlDown("down");
+    const moveX = keyboardLeft || keyboardRight ? Number(keyboardRight) - Number(keyboardLeft) : this.touchInput.x;
+    const moveY = keyboardUp || keyboardDown ? Number(keyboardDown) - Number(keyboardUp) : this.touchInput.y;
+    const acceleration = HERO_ACCELERATION;
     const inWater = this.hero.y >= WATERLINE_Y;
-    const nearSurface = this.hero.y <= WATERLINE_Y + 64;
+    const nearSurface = this.hero.y <= WATERLINE_Y + SURFACE_BOB_DEPTH;
     const jumpPressed = up && !this.lastJumpPressed;
-    const hasUpwardMomentum = inWater && body.velocity.y < SURFACE_BREACH_SPEED;
+    const readyForSurfaceJump =
+      inWater &&
+      this.hero.y <= WATERLINE_Y + SURFACE_JUMP_TRIGGER_DEPTH &&
+      body.velocity.y > SURFACE_BREACH_SPEED;
+    if (!up) {
+      this.surfaceJumpHoldConsumed = false;
+    }
     this.lastJumpPressed = up;
 
-    body.setAcceleration(0);
-    if (left) body.setAccelerationX(inWater ? -acceleration : -acceleration * 0.24);
-    if (right) body.setAccelerationX(inWater ? acceleration : acceleration * 0.24);
-    if ((jumpPressed || hasUpwardMomentum) && nearSurface && !this.isSurfaceJumping) {
+    const seconds = delta / 1000;
+    const response = 1 - Math.exp(-seconds * 12);
+    let targetAccelerationX = 0;
+    let targetAccelerationY = 0;
+    if (left || right) targetAccelerationX = moveX * (inWater ? acceleration : acceleration * 0.24);
+    if (up && !this.surfaceJumpHoldConsumed && (jumpPressed || nearSurface) && readyForSurfaceJump && !this.isSurfaceJumping) {
       body.setVelocityY(SURFACE_JUMP_VELOCITY);
       body.setAccelerationY(0);
       this.isSurfaceJumping = true;
+      this.surfaceBobSuppressed = false;
+      this.wasSurfaceBobbing = false;
+      this.surfaceJumpHoldConsumed = true;
     }
-    if (inWater && up) body.setAccelerationY(-acceleration * 0.72);
-    if (inWater && down) body.setAccelerationY(acceleration * 0.72);
+    if (inWater && (up || down)) targetAccelerationY = moveY * acceleration * 0.72;
+
+    body.setAcceleration(
+      Phaser.Math.Linear(body.acceleration.x, targetAccelerationX, response),
+      Phaser.Math.Linear(body.acceleration.y, targetAccelerationY, response),
+    );
+
+    const idleDrag = Math.exp(-seconds * HERO_IDLE_VELOCITY_DRAG);
+    const canApplyIdleDrag = inWater && !nearSurface && !this.isSurfaceJumping;
+    if (canApplyIdleDrag && Math.abs(targetAccelerationX) < 0.001) {
+      body.setVelocityX(body.velocity.x * idleDrag);
+    }
+    if (canApplyIdleDrag && Math.abs(targetAccelerationY) < 0.001) {
+      body.setVelocityY(body.velocity.y * idleDrag);
+    }
   }
 
   private updateSurfacePhysics(time: number) {
     const body = this.hero.body as Phaser.Physics.Arcade.Body;
-    const nearSurface = this.hero.y < WATERLINE_Y + 64;
+    const nearSurface = this.hero.y < WATERLINE_Y + SURFACE_BOB_DEPTH;
     const airborne = this.hero.y < WATERLINE_Y - 2;
 
     if (this.isSurfaceJumping) {
@@ -1861,23 +3414,40 @@ export class OceanScene extends Phaser.Scene {
       body.setGravityY(AIR_GRAVITY);
 
       if (this.hero.y >= WATERLINE_Y && body.velocity.y >= 0) {
+        body.setVelocityY(Math.min(body.velocity.y * SURFACE_REENTRY_VELOCITY_MULTIPLIER, SURFACE_REENTRY_MAX_VELOCITY));
         this.isSurfaceJumping = false;
       }
 
+      this.wasSurfaceBobbing = false;
       return;
     }
 
     body.setGravityY(airborne ? AIR_GRAVITY : 0);
 
     if (airborne) {
+      this.surfaceBobSuppressed = false;
+      this.wasSurfaceBobbing = false;
       body.setDrag(0.04, 0);
       return;
     }
 
     body.setDrag(0.9, 0.9);
-    if (!nearSurface) return;
+    const downHeld = this.cursors.down.isDown || this.keys.down.isDown || this.isControlDown("down");
+    if (nearSurface && downHeld) {
+      this.surfaceBobSuppressed = true;
+    }
+    if (!nearSurface) {
+      this.surfaceBobSuppressed = false;
+      this.wasSurfaceBobbing = false;
+      return;
+    }
+    if (this.surfaceBobSuppressed) return;
+    if (!this.wasSurfaceBobbing && body.velocity.y > SURFACE_BOB_ENTRY_MAX_SPEED) {
+      body.setVelocityY(SURFACE_BOB_ENTRY_MAX_SPEED);
+    }
+    this.wasSurfaceBobbing = true;
 
-    const bob = Math.sin(time * 0.0016 + this.hero.x * 0.006) * 3;
+    const bob = Math.sin(time * 0.0006 + this.hero.x * 0.00225) * 1.125;
     const targetY = SURFACE_REST_Y + bob;
     const canBreach = body.velocity.y < SURFACE_BREACH_SPEED;
     if (canBreach) {
@@ -1888,10 +3458,26 @@ export class OceanScene extends Phaser.Scene {
     const displacement = targetY - this.hero.y;
     const spring = Phaser.Math.Clamp(displacement * 10 - body.velocity.y * 0.22, -220, 220);
     body.setAccelerationY(body.acceleration.y + spring);
+    if (!downHeld && body.velocity.y > SURFACE_BOB_MAX_PASSIVE_SINK_SPEED) {
+      body.setVelocityY(SURFACE_BOB_MAX_PASSIVE_SINK_SPEED);
+    }
 
     if (this.hero.y < WATERLINE_Y + 4 && body.velocity.y < 0) {
       body.setVelocityY(body.velocity.y * 0.22);
     }
+  }
+
+  private clampHeroSwimVelocity() {
+    if (this.isSurfaceJumping || this.hero.y < WATERLINE_Y) return;
+
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    const normalizedSpeed = Math.hypot(
+      body.velocity.x / HERO_MAX_VELOCITY_X,
+      body.velocity.y / HERO_MAX_VELOCITY_Y,
+    );
+    if (normalizedSpeed <= 1) return;
+
+    body.setVelocity(body.velocity.x / normalizedSpeed, body.velocity.y / normalizedSpeed);
   }
 
   private updateHeroPresentation() {
@@ -1901,12 +3487,37 @@ export class OceanScene extends Phaser.Scene {
       this.faceSprite(this.hero, "port-jackson", this.heroDirectionX);
     }
 
+    this.updateHeroSwimAnimation();
+
     const verticalPitch = Phaser.Math.Clamp(body.velocity.y / 760, -0.32, 0.32);
     this.hero.setRotation(verticalPitch * this.heroDirectionX);
   }
 
+  private updateHeroSwimAnimation() {
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    const speed = Math.hypot(body.velocity.x, body.velocity.y);
+
+    if (speed < 18) {
+      this.heroSwimFrameIndex = 1;
+      this.heroSwimFrameProgress = 0;
+      this.hero.setTexture(CREATURES.hero.frames.center.key);
+      return;
+    }
+
+    const frameRate = Phaser.Math.Linear(2.5, 13, Phaser.Math.Clamp(speed / 360, 0, 1));
+    this.heroSwimFrameProgress += (this.game.loop.delta / 1000) * frameRate;
+    const frameSteps = Math.floor(this.heroSwimFrameProgress);
+    if (frameSteps <= 0) return;
+
+    this.heroSwimFrameProgress -= frameSteps;
+    this.heroSwimFrameIndex = (this.heroSwimFrameIndex + frameSteps) % HERO_SWIM_FRAMES.length;
+    this.hero.setTexture(HERO_SWIM_FRAMES[this.heroSwimFrameIndex]);
+  }
+
   private updateParallax(delta: number) {
-    this.cameras.main.setRoundPixels(true);
+    this.updateDistalWaterColumn();
+    this.updateCoralGardenBackdrop();
+    this.updateFinalBiomeBackgrounds();
     const seconds = delta / 1000;
     for (const cloud of this.skyClouds) {
       cloud.container.x += cloud.speed * seconds;
@@ -1914,6 +3525,201 @@ export class OceanScene extends Phaser.Scene {
         cloud.container.x = -cloud.width;
       }
     }
+  }
+
+  private updateDistalWaterColumn() {
+    if (!this.distalWaterColumn) return;
+
+    const camera = this.cameras.main;
+    const texture = this.textures.get(DISTAL_WATER_COLUMN_KEY).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const waterlineInViewY = Phaser.Math.Clamp(WATERLINE_Y - camera.scrollY, 0, camera.height);
+    const underwaterHeight = Math.max(1, camera.height - waterlineInViewY);
+    const viewWidth = camera.width + DISTAL_WATER_COLUMN_VIEW_MARGIN * 2;
+    const viewHeight = camera.height + DISTAL_WATER_COLUMN_VIEW_MARGIN * 2;
+    const scale = Math.max(viewWidth / texture.width, viewHeight / texture.height) * DISTAL_WATER_COLUMN_SCALE;
+    const displayWidth = texture.width * scale;
+    const displayHeight = texture.height * scale;
+    const previousScroll = this.distalWaterLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
+    const deltaX = camera.scrollX - previousScroll.x;
+    const deltaY = camera.scrollY - previousScroll.y;
+    this.distalWaterLastScroll = { x: camera.scrollX, y: camera.scrollY };
+    const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - DISTAL_WATER_COLUMN_EDGE_PADDING);
+    const surfaceLinkedTop = waterlineInViewY > 0 ? waterlineInViewY - DISTAL_WATER_COLUMN_VIEW_MARGIN : -DISTAL_WATER_COLUMN_VIEW_MARGIN;
+    const minOffsetY = Math.min(0, camera.height - surfaceLinkedTop - displayHeight + DISTAL_WATER_COLUMN_EDGE_PADDING);
+    const maxOffsetY = Math.max(0, waterlineInViewY - surfaceLinkedTop - DISTAL_WATER_COLUMN_EDGE_PADDING);
+
+    this.distalWaterScrollOffset.x = Phaser.Math.Clamp(
+      this.distalWaterScrollOffset.x - deltaX * DISTAL_WATER_COLUMN_SCROLL_DRIFT_X,
+      -maxOffsetX,
+      maxOffsetX,
+    );
+    this.distalWaterScrollOffset.y = Phaser.Math.Clamp(
+      this.distalWaterScrollOffset.y - deltaY * DISTAL_WATER_COLUMN_SCROLL_DRIFT_Y,
+      minOffsetY,
+      maxOffsetY,
+    );
+
+    const targetOffsetX = Phaser.Math.Clamp(this.distalWaterScrollOffset.x, -maxOffsetX, maxOffsetX);
+    const targetOffsetY = Phaser.Math.Clamp(this.distalWaterScrollOffset.y, minOffsetY, maxOffsetY);
+    this.distalWaterOffset.x = Phaser.Math.Linear(
+      this.distalWaterOffset.x,
+      targetOffsetX,
+      DISTAL_WATER_COLUMN_RESPONSE,
+    );
+    this.distalWaterOffset.y = Phaser.Math.Linear(
+      this.distalWaterOffset.y,
+      targetOffsetY,
+      DISTAL_WATER_COLUMN_RESPONSE,
+    );
+
+    this.distalWaterColumnMask
+      ?.clear()
+      .fillStyle(0xffffff, 1)
+      .fillRect(0, waterlineInViewY, camera.width, underwaterHeight);
+    this.distalWaterColumn
+      .setPosition(
+        camera.width / 2 + this.distalWaterOffset.x,
+        surfaceLinkedTop + displayHeight / 2 + this.distalWaterOffset.y,
+      )
+      .setDisplaySize(displayWidth, displayHeight);
+  }
+
+  private updateCoralGardenBackdrop() {
+    if (!this.coralGardenBackdrop) return;
+
+    const camera = this.cameras.main;
+    const texture = this.textures.get(CORAL_GARDEN_BACKDROP_KEY).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const waterlineInViewY = Phaser.Math.Clamp(WATERLINE_Y - camera.scrollY, 0, camera.height);
+    const underwaterHeight = Math.max(1, camera.height - waterlineInViewY);
+    const viewWidth = camera.width + CORAL_GARDEN_BACKDROP_VIEW_MARGIN * 2;
+    const viewHeight = camera.height + CORAL_GARDEN_BACKDROP_VIEW_MARGIN * 2;
+    const scale = Math.max(viewWidth / texture.width, viewHeight / texture.height) * CORAL_GARDEN_BACKDROP_SCALE;
+    const displayWidth = texture.width * scale;
+    const displayHeight = texture.height * scale;
+    const previousScroll = this.coralGardenBackdropLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
+    const deltaY = camera.scrollY - previousScroll.y;
+    this.coralGardenBackdropLastScroll = { x: camera.scrollX, y: camera.scrollY };
+    const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - CORAL_GARDEN_BACKDROP_EDGE_PADDING);
+    const surfaceLinkedTop = waterlineInViewY > 0
+      ? waterlineInViewY - CORAL_GARDEN_BACKDROP_VIEW_MARGIN
+      : -CORAL_GARDEN_BACKDROP_VIEW_MARGIN;
+    const minOffsetY = Math.min(0, camera.height - surfaceLinkedTop - displayHeight + CORAL_GARDEN_BACKDROP_EDGE_PADDING);
+    const maxOffsetY = Math.max(0, waterlineInViewY - surfaceLinkedTop - CORAL_GARDEN_BACKDROP_EDGE_PADDING);
+    const targetOffsetX = this.coralGardenBackdropRegionOffsetX(maxOffsetX);
+    this.coralGardenBackdropScrollOffset.y = Phaser.Math.Clamp(
+      this.coralGardenBackdropScrollOffset.y - deltaY * CORAL_GARDEN_BACKDROP_SCROLL_DRIFT_Y,
+      minOffsetY,
+      maxOffsetY,
+    );
+
+    this.coralGardenBackdropOffset.x = Phaser.Math.Linear(
+      this.coralGardenBackdropOffset.x,
+      targetOffsetX,
+      CORAL_GARDEN_BACKDROP_RESPONSE,
+    );
+    this.coralGardenBackdropOffset.y = Phaser.Math.Linear(
+      this.coralGardenBackdropOffset.y,
+      Phaser.Math.Clamp(this.coralGardenBackdropScrollOffset.y, minOffsetY, maxOffsetY),
+      CORAL_GARDEN_BACKDROP_RESPONSE,
+    );
+
+    const targetAlpha = this.coralGardenBackdropTargetAlpha();
+    this.coralGardenBackdrop.setAlpha(targetAlpha).setVisible(targetAlpha > 0);
+    this.coralGardenBackdropMask
+      ?.clear()
+      .fillStyle(0xffffff, 1)
+      .fillRect(0, waterlineInViewY, camera.width, underwaterHeight);
+    this.coralGardenBackdrop
+      .setPosition(
+        camera.width / 2 + this.coralGardenBackdropOffset.x,
+        surfaceLinkedTop + displayHeight / 2 + this.coralGardenBackdropOffset.y,
+      )
+      .setDisplaySize(displayWidth, displayHeight);
+  }
+
+  private coralGardenBackdropTargetAlpha() {
+    const zone = this.coralGardenBackdropZone;
+    if (!zone || !this.hero || this.isHeroInCave()) return 0;
+
+    const viewCenterX = this.cameras.main.scrollX + this.cameras.main.width / 2;
+    if (!this.isShallowGardenZoneId(zoneAtPosition(this.hero.x, this.hero.y).id)) return 0;
+    if (!this.isShallowGardenZoneId(zoneAtPosition(viewCenterX, this.hero.y).id)) return 0;
+
+    const viewZoneAlpha = this.coralGardenBackdropZoneAlphaAt(viewCenterX);
+    const heroZoneAlpha = this.devCameraEnabled ? 1 : this.coralGardenBackdropZoneAlphaAt(this.hero.x);
+
+    return CORAL_GARDEN_BACKDROP_ALPHA * Math.min(viewZoneAlpha, heroZoneAlpha);
+  }
+
+  private coralGardenBackdropZoneAlphaAt(x: number) {
+    const zone = this.coralGardenBackdropZone;
+    if (!zone || x < zone.startX || x >= zone.endX) return 0;
+
+    const fade = CORAL_GARDEN_BACKDROP_ZONE_FADE_DISTANCE;
+    const fadeIn = Phaser.Math.Clamp((x - zone.startX) / fade, 0, 1);
+    const fadeOut = Phaser.Math.Clamp((zone.endX - x) / fade, 0, 1);
+    const smoothFadeIn = fadeIn * fadeIn * (3 - 2 * fadeIn);
+    const smoothFadeOut = fadeOut * fadeOut * (3 - 2 * fadeOut);
+
+    return Math.min(smoothFadeIn, smoothFadeOut);
+  }
+
+  private coralGardenBackdropRegionOffsetX(maxOffsetX: number) {
+    const zone = this.coralGardenBackdropZone;
+    if (!zone || maxOffsetX <= 0) return 0;
+
+    const viewCenterX = this.cameras.main.scrollX + this.cameras.main.width / 2;
+    const progress = Phaser.Math.Clamp((viewCenterX - zone.startX) / (zone.endX - zone.startX), 0, 1);
+    return Phaser.Math.Linear(maxOffsetX, -maxOffsetX, progress);
+  }
+
+  private updateFinalBiomeBackgrounds() {
+    if (this.finalBiomeBackgrounds.length === 0) return;
+
+    const camera = this.cameras.main;
+    const waterlineInViewY = Phaser.Math.Clamp(WATERLINE_Y - camera.scrollY, 0, camera.height);
+    const underwaterHeight = Math.max(1, camera.height - waterlineInViewY);
+
+    for (const layer of this.finalBiomeBackgrounds) {
+      const texture = this.textures.get(layer.image.texture.key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+      const scale = camera.height / texture.height;
+      const displayWidth = texture.width * scale;
+      const displayHeight = texture.height * scale;
+      const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - FINAL_BIOME_BACKGROUND_EDGE_PADDING);
+      const worldProgress = this.finalBiomeBackgroundProgress(camera.scrollX + camera.width / 2);
+      layer.offset.x = Phaser.Math.Linear(
+        layer.offset.x,
+        Phaser.Math.Linear(maxOffsetX, -maxOffsetX, worldProgress),
+        FINAL_BIOME_BACKGROUND_RESPONSE,
+      );
+      const inCave = this.hero ? this.isHeroInCave() : false;
+      layer.image.setAlpha(inCave ? 0 : FINAL_BIOME_BACKGROUND_ALPHA).setVisible(!inCave);
+      layer.mask
+        .clear()
+        .fillStyle(0xffffff, 1)
+        .fillRect(0, waterlineInViewY, camera.width, underwaterHeight);
+      layer.image
+        .setPosition(
+          camera.width / 2 + layer.offset.x,
+          waterlineInViewY + displayHeight / 2,
+        )
+        .setScale(scale);
+    }
+  }
+
+  private finalBiomeBackgroundProgress(worldX: number) {
+    if (worldX < CORAL_END_X) {
+      const local = Phaser.Math.Clamp((worldX - BEACH_END_X) / Math.max(1, CORAL_END_X - BEACH_END_X), 0, 1);
+      return local * FINAL_BIOME_SEAGRASS_IMAGE_END;
+    }
+
+    if (worldX < KELP_END_X) {
+      const local = Phaser.Math.Clamp((worldX - CORAL_END_X) / Math.max(1, KELP_END_X - CORAL_END_X), 0, 1);
+      return Phaser.Math.Linear(FINAL_BIOME_SEAGRASS_IMAGE_END, FINAL_BIOME_KELP_IMAGE_END, local);
+    }
+
+    const local = Phaser.Math.Clamp((worldX - KELP_END_X) / Math.max(1, WORLD_WIDTH - KELP_END_X), 0, 1);
+    return Phaser.Math.Linear(FINAL_BIOME_KELP_IMAGE_END, 1, local);
   }
 
   private updateLighting() {
@@ -1963,6 +3769,25 @@ export class OceanScene extends Phaser.Scene {
         this.depthGaugeMax.textContent = `${DEPTH_GAUGE_MAX}m`;
       }
     }
+  }
+
+  private updateHeroVisibilityStatus() {
+    const nextStatus: HeroVisibilityStatus = this.isHeroInSeagrass() ? "hidden" : "visible";
+    if (this.heroVisibilityStatus === nextStatus) return;
+
+    this.heroVisibilityStatus = nextStatus;
+    this.hero.setDepth(nextStatus === "hidden" ? HERO_SEAGRASS_HIDDEN_DEPTH : HERO_VISIBLE_DEPTH);
+  }
+
+  private isHeroInSeagrass() {
+    const zone = zoneAtPosition(this.hero.x, this.hero.y);
+    if (zone.id !== "coral" && zone.id !== "kelp") return false;
+    if (this.hero.x > KELP_END_X - 140) return false;
+
+    const floorY = this.smoothedTerrainGuideYAt(this.hero.x, this.terrainTopByColumn);
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    const heroBottom = this.hero.y + body.halfHeight;
+    return heroBottom >= floorY - SEAGRASS_HIDE_DISTANCE_FROM_FLOOR && heroBottom <= floorY + TILE * 0.9;
   }
 
   private updateCaveVisibility() {

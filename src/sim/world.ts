@@ -2,20 +2,24 @@ import { mulberry32 } from "./random";
 
 export const TILE = 32;
 export const WATERLINE_Y = 266;
-export const BEACH_END_X = 900;
+export const BEACH_END_X = 1500;
 export const WORLD_WIDTH = 50000;
 const OCEAN_WIDTH = WORLD_WIDTH - BEACH_END_X;
-const CORAL_WIDTH = Math.round(OCEAN_WIDTH * 0.2);
-const OPEN_WIDTH = Math.round(OCEAN_WIDTH * 0.35);
-const CORAL_END_X = BEACH_END_X + CORAL_WIDTH;
-const OPEN_END_X = CORAL_END_X + OPEN_WIDTH;
+const SEAGRASS_WIDTH = Math.round(OCEAN_WIDTH * 0.2);
+const KELP_WIDTH = Math.round(OCEAN_WIDTH * 0.2);
+const CORAL_WIDTH = SEAGRASS_WIDTH + KELP_WIDTH;
+const OPEN_WIDTH = Math.round(OCEAN_WIDTH * 0.25);
+export const CORAL_END_X = BEACH_END_X + SEAGRASS_WIDTH;
+export const KELP_END_X = BEACH_END_X + CORAL_WIDTH;
+const OPEN_END_X = KELP_END_X + OPEN_WIDTH;
+const DROP_OFF_END_X = OPEN_END_X + Math.round((WORLD_WIDTH - OPEN_END_X) * 0.24);
 export const DEPTH_PIXELS_PER_METER = 30;
 export const SEAFLOOR_MAX_DEPTH_METERS = 500;
 export const WORLD_MAX_DEPTH_METERS = 720;
 export const WORLD_HEIGHT =
   Math.ceil((WATERLINE_Y + WORLD_MAX_DEPTH_METERS * DEPTH_PIXELS_PER_METER + TILE * 8) / TILE) * TILE;
 
-export type OceanZoneId = "surface" | "coral" | "deep" | "cave";
+export type OceanZoneId = "beach" | "surface" | "coral" | "kelp" | "dropoff" | "deep" | "cave";
 
 export interface OceanZone {
   id: OceanZoneId;
@@ -50,7 +54,8 @@ export type CreatureKey =
   | "killer-whale"
   | "nudhhi"
   | "seadragon"
-  | "smooth-sting-ray";
+  | "smooth-sting-ray"
+  | "yellow-blue-fish";
 
 export interface CreatureSpawn {
   x: number;
@@ -59,6 +64,9 @@ export interface CreatureSpawn {
   drift: number;
   scale: number;
   zoneId: OceanZoneId;
+  schoolId?: number;
+  schoolOffsetX?: number;
+  schoolOffsetY?: number;
 }
 
 export interface WorldModel {
@@ -72,10 +80,22 @@ export interface WorldModel {
 
 export const DEFAULT_CAVE_SEED = 130626;
 
+export const BEACH_ZONE: OceanZone = {
+  id: "beach",
+  name: "Beach",
+  startX: 0,
+  endX: BEACH_END_X,
+  baseColor: 0xf4ce63,
+  waterColor: 0x8fdade,
+  rockColor: 0xd8aa48,
+  accentColor: 0xfff5be,
+  maxDepth: 8,
+};
+
 export const ZONES: OceanZone[] = [
   {
     id: "coral",
-    name: "Shallow Coral Area",
+    name: "Seagrass Meadow",
     startX: BEACH_END_X,
     endX: CORAL_END_X,
     baseColor: 0x168f93,
@@ -85,9 +105,20 @@ export const ZONES: OceanZone[] = [
     maxDepth: 35,
   },
   {
-    id: "surface",
-    name: "Open Ocean",
+    id: "kelp",
+    name: "Kelp Forest",
     startX: CORAL_END_X,
+    endX: KELP_END_X,
+    baseColor: 0x168f93,
+    waterColor: 0x0c6f84,
+    rockColor: 0x8f7568,
+    accentColor: 0x9bd66f,
+    maxDepth: 35,
+  },
+  {
+    id: "surface",
+    name: "Continental Shelf",
+    startX: KELP_END_X,
     endX: OPEN_END_X,
     baseColor: 0x42bbd1,
     waterColor: 0x1b8dab,
@@ -96,9 +127,20 @@ export const ZONES: OceanZone[] = [
     maxDepth: 100,
   },
   {
-    id: "deep",
-    name: "Ocean Drop Off",
+    id: "dropoff",
+    name: "Drop Off",
     startX: OPEN_END_X,
+    endX: DROP_OFF_END_X,
+    baseColor: 0x12334b,
+    waterColor: 0x0a2840,
+    rockColor: 0x344057,
+    accentColor: 0x8eefff,
+    maxDepth: 500,
+  },
+  {
+    id: "deep",
+    name: "Open Ocean",
+    startX: DROP_OFF_END_X,
     endX: WORLD_WIDTH,
     baseColor: 0x092845,
     waterColor: 0x061b33,
@@ -107,6 +149,17 @@ export const ZONES: OceanZone[] = [
     maxDepth: 500,
   },
 ];
+
+const SEAGRASS_ZONE = ZONES[0];
+const KELP_ZONE = ZONES[1];
+const SHELF_ZONE = ZONES[2];
+const DROP_OFF_ZONE = ZONES[3];
+const OPEN_OCEAN_ZONE = ZONES[4];
+const DEEP_ZONE: OceanZone = {
+  ...OPEN_OCEAN_ZONE,
+  startX: DROP_OFF_ZONE.startX,
+  endX: OPEN_OCEAN_ZONE.endX,
+};
 
 export const CAVE_ZONE: OceanZone = {
   id: "cave",
@@ -119,6 +172,8 @@ export const CAVE_ZONE: OceanZone = {
   accentColor: 0x78d7ff,
   maxDepth: WORLD_MAX_DEPTH_METERS,
 };
+
+export const DISPLAY_ZONES: OceanZone[] = [BEACH_ZONE, ...ZONES];
 
 const GRID_W = Math.ceil(WORLD_WIDTH / TILE);
 const GRID_H = Math.floor(WORLD_HEIGHT / TILE);
@@ -135,6 +190,7 @@ export function tileKey(tx: number, ty: number): string {
 }
 
 export function zoneAtX(x: number): OceanZone {
+  if (x < BEACH_END_X) return BEACH_ZONE;
   return ZONES.find((zone) => x >= zone.startX && x < zone.endX) ?? ZONES[0];
 }
 
@@ -155,8 +211,8 @@ export function maxDepthAtX(x: number): number {
 }
 
 function baselineDepthAtX(x: number): number {
-  const openStart = ZONES[1].startX;
-  const deepStart = ZONES[2].startX;
+  const openStart = SHELF_ZONE.startX;
+  const deepStart = DEEP_ZONE.startX;
   if (x < BEACH_END_X) {
     return clamp(6 + smooth01(x / BEACH_END_X) * 2, 6, 8);
   }
@@ -171,7 +227,7 @@ function baselineDepthAtX(x: number): number {
     return lerp(35, 100, smooth01(openDepthT));
   }
 
-  const zone = ZONES[2];
+  const zone = DEEP_ZONE;
   const local = clamp((x - zone.startX) / (zone.endX - zone.startX), 0, 1);
   const dropT = clamp(local / 0.18, 0, 1);
   const deepDropBottom = lerp(100, 455, smooth01(dropT));
@@ -194,8 +250,8 @@ function baselineDepthAtX(x: number): number {
 }
 
 function fixedTerrainReliefAtX(x: number) {
-  const openStart = ZONES[1].startX;
-  const deepStart = ZONES[2].startX;
+  const openStart = SHELF_ZONE.startX;
+  const deepStart = DEEP_ZONE.startX;
   const ripple =
     Math.sin(x * 0.018 + 0.8) * 0.85 +
     Math.sin(x * 0.041 + 2.4) * 0.45 +
@@ -256,8 +312,8 @@ function gaussianTerrainFeature(x: number, center: number, radius: number, depth
 
 function minimumDepthAtX(x: number) {
   if (x < BEACH_END_X) return 5;
-  if (x < ZONES[1].startX) return 7;
-  if (x < ZONES[2].startX) return 18;
+  if (x < SHELF_ZONE.startX) return 7;
+  if (x < DEEP_ZONE.startX) return 18;
   return 70;
 }
 
@@ -302,7 +358,7 @@ export function generateWorld(seed = DEFAULT_CAVE_SEED): WorldModel {
   }
 
   return {
-    zones: ZONES,
+    zones: DISPLAY_ZONES,
     rocks,
     decorations: [],
     creatures: generateCreatures(solid, mulberry32((seed ^ 0xC2EA71) >>> 0)),
@@ -368,7 +424,7 @@ function carveSeededCaveSystems(
 ) {
   const specs: CaveSystemSpec[] = [
     {
-      zone: ZONES[0],
+      zone: SEAGRASS_ZONE,
       entranceCount: 2,
       bulkTrackCount: 11,
       walkerCount: 18,
@@ -384,7 +440,7 @@ function carveSeededCaveSystems(
       seedSalt: 0xC0A1,
     },
     {
-      zone: ZONES[1],
+      zone: SHELF_ZONE,
       entranceCount: 2,
       bulkTrackCount: 13,
       walkerCount: 16,
@@ -400,7 +456,7 @@ function carveSeededCaveSystems(
       seedSalt: 0x0CEA,
     },
     {
-      zone: ZONES[2],
+      zone: DEEP_ZONE,
       entranceCount: 3,
       bulkTrackCount: 12,
       walkerCount: 16,
@@ -450,10 +506,23 @@ function seededCaveEntrances(zone: OceanZone, count: number, random: () => numbe
     : Math.floor(zone.startX / TILE);
   const endTx = Math.floor(zone.endX / TILE);
   const width = endTx - startTx;
+  if (zone.id === "deep") {
+    const ledgeEntrance = dropoffSecondLedgeEntranceTx();
+    const extraRatios = [0.08, 0.2, 0.3];
+    const entrances = [ledgeEntrance];
+    for (let index = 0; entrances.length < count && index < extraRatios.length; index += 1) {
+      const jitter = Math.round((random() - 0.5) * 14);
+      const tx = clamp(
+        Math.round(startTx + width * extraRatios[index] + jitter + Math.sin(index * 2.1 + width) * 5),
+        startTx + 12,
+        endTx - 12,
+      );
+      if (!entrances.some((existing) => Math.abs(existing - tx) < 18)) entrances.push(tx);
+    }
+    return entrances.slice(0, count);
+  }
   const ratios =
-    zone.id === "deep"
-      ? [0.05, 0.15, 0.27]
-      : count === 1
+    count === 1
         ? [0.5]
         : [0.34, 0.67];
 
@@ -463,9 +532,21 @@ function seededCaveEntrances(zone: OceanZone, count: number, random: () => numbe
   });
 }
 
+function dropoffSecondLedgeEntranceTx() {
+  const deepStartTx = Math.floor(DEEP_ZONE.startX / TILE);
+  const deepWidthTiles = Math.floor((DEEP_ZONE.endX - DEEP_ZONE.startX) / TILE);
+  const dropWidthTiles = Math.floor(deepWidthTiles * 0.24);
+  const secondLedgeRatio = 0.26;
+  return clamp(
+    deepStartTx + Math.round(dropWidthTiles * secondLedgeRatio) + 10,
+    deepStartTx + 16,
+    deepStartTx + dropWidthTiles - 16,
+  );
+}
+
 function firstDropoffCaveEntranceTx() {
-  const startTx = Math.floor(ZONES[2].startX / TILE);
-  const endTx = Math.floor(ZONES[2].endX / TILE);
+  const startTx = Math.floor(DEEP_ZONE.startX / TILE);
+  const endTx = Math.floor(DEEP_ZONE.endX / TILE);
   const minDepthY = depthToY(200);
   for (let tx = startTx; tx < endTx; tx += 1) {
     if (seafloorTileFor(tx) * TILE >= minDepthY) {
@@ -628,8 +709,8 @@ function carveDropoffMainTrackCaves(
   trackCounter: CaveTrackCounter,
 ) {
   const targets: CaveAnchor[] = [];
-  const terminalStartTx = Math.floor((ZONES[1].startX + 900) / TILE);
-  const terminalEndTx = Math.floor((ZONES[1].endX - 900) / TILE);
+  const terminalStartTx = Math.floor((SHELF_ZONE.startX + 900) / TILE);
+  const terminalEndTx = Math.floor((SHELF_ZONE.endX - 900) / TILE);
   const terminalMinTy = Math.floor(5000 / TILE);
 
   for (let index = 0; index < anchors.length; index += 1) {
@@ -1400,7 +1481,7 @@ function validateCrossBiomeCaveLink(
 function deepCavernOffsetTiles(scope: OceanZone | CaveSystemSpec, tx = 0) {
   const zone = "mergeFamily" in scope ? scope.zone : scope;
   const meters = zone.id === "deep" ? 42 : 36;
-  if ("mergeFamily" in scope && scope.zone.id === "deep" && tx * TILE < ZONES[2].startX) {
+  if ("mergeFamily" in scope && scope.zone.id === "deep" && tx * TILE < DEEP_ZONE.startX) {
     return Math.max(12, depthMetersToTiles(82));
   }
   return Math.max(10, depthMetersToTiles(meters));
@@ -2169,9 +2250,9 @@ function carveHorizontalLedgeCaveMouth(
     WATERLINE_TILE + 7,
     caveBottomTileFor(tx) - 5,
   );
-  const mouthLength = 15;
-  const throatLength = 9;
-  const mouthHalfHeight = 5;
+  const mouthLength = 22;
+  const throatLength = 14;
+  const mouthHalfHeight = 6;
 
   for (let step = -8; step <= mouthLength; step += 1) {
     const x = tx + step;
@@ -2217,8 +2298,8 @@ function addConnectedBommies(
   random: () => number,
   protectedSolid: boolean[][],
 ) {
-  const coral = ZONES[0];
-  const open = ZONES[1];
+  const coral = { startX: SEAGRASS_ZONE.startX, endX: KELP_ZONE.endX };
+  const open = SHELF_ZONE;
 
   createBommiesInZone(
     solid,
@@ -2248,7 +2329,7 @@ function addShallowCoralCutoutLedges(
   random: () => number,
   protectedSolid: boolean[][],
 ) {
-  const coral = ZONES[0];
+  const coral = { startX: SEAGRASS_ZONE.startX, endX: KELP_ZONE.endX };
   const startTx = Math.floor((coral.startX + 1120) / TILE);
   const endTx = Math.floor((coral.endX - 460) / TILE);
   const count = 3;
@@ -2345,7 +2426,7 @@ function addDropoffCliffOverhangs(
   random: () => number,
   protectedSolid: boolean[][],
 ) {
-  const deep = ZONES[2];
+  const deep = DEEP_ZONE;
   const deepStartTx = Math.floor(deep.startX / TILE);
   const deepWidthTiles = Math.floor((deep.endX - deep.startX) / TILE);
   const dropWidthTiles = Math.floor(deepWidthTiles * 0.24);
@@ -2610,7 +2691,7 @@ function createBommiesInZone(
       columnTop = clamp(columnTop, WATERLINE_TILE + 3, floorTy - 1);
       for (let ty = columnTop; ty < GRID_H; ty += 1) {
         solid[ty][columnTx] = true;
-        protectedSolid[ty][columnTx] = true;
+        if (ty <= floorTy + 2) protectedSolid[ty][columnTx] = true;
       }
     }
 
@@ -2861,7 +2942,7 @@ function carveCircle(solid: boolean[][], cx: number, cy: number, radius: number)
 
 function generateDecorations(solid: boolean[][], random: () => number) {
   const decorations: Decoration[] = [];
-  const deep = ZONES[2];
+  const deep = DEEP_ZONE;
   const startTx = Math.floor(deep.startX / TILE) + 4;
   const endTx = GRID_W - 4;
   const targetCount = 220;
@@ -2897,17 +2978,78 @@ function generateCreatures(solid: boolean[][], random: () => number) {
     return isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 4, 2) && ty < seafloorTileFor(tx) - 8;
   });
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "nudhhi", randomCount(random, 2, 4), coralGardenBounds(), (tx, ty) => {
-    return zoneAtX(tx * TILE).id === "coral" && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
+    return isShallowGardenZone(zoneAtX(tx * TILE).id) && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "seadragon", randomCount(random, 2, 5), coralGardenBounds(), (tx, ty) => {
     const floor = seafloorTileFor(tx);
-    return zoneAtX(tx * TILE).id === "coral" && isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 2, 1) && ty >= floor - 7 && ty <= floor - 2;
+    return isShallowGardenZone(zoneAtX(tx * TILE).id) && isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 2, 1) && ty >= floor - 7 && ty <= floor - 2;
   });
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "smooth-sting-ray", randomCount(random, 2, 5), coralAndOpenOceanBounds(), (tx, ty) => {
     const zoneId = zoneAtX(tx * TILE).id;
-    return (zoneId === "coral" || zoneId === "surface") && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
+    return (isShallowGardenZone(zoneId) || zoneId === "surface") && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
+  addYellowBlueFishSchools(creatures, solid, random, usedCreatureTiles);
   return creatures;
+}
+
+function addYellowBlueFishSchools(
+  creatures: CreatureSpawn[],
+  solid: boolean[][],
+  random: () => number,
+  usedCreatureTiles: Set<string>,
+) {
+  const bounds = coralAndOpenOceanBounds();
+  const schoolCount = randomCount(random, 10, 14);
+
+  for (let school = 0; school < schoolCount; school += 1) {
+    const anchor = findSpawnTile(solid, random, bounds, (tx, ty) => {
+      const zoneId = zoneAtX(tx * TILE).id;
+      return (
+        isShallowGardenZone(zoneId) &&
+        isAwayFromCreatures(usedCreatureTiles, tx, ty) &&
+        isOpenWaterTile(solid, tx, ty) &&
+        hasCreatureClearance(solid, tx, ty, 4, 2)
+      );
+    });
+    if (!anchor) continue;
+
+    const targetCount = randomCount(random, 4, 9);
+    const members: Array<{ tx: number; ty: number; scale: number }> = [];
+    const localUsed = new Set<string>();
+
+    for (let attempt = 0; attempt < 90 && members.length < targetCount; attempt += 1) {
+      const spreadX = Math.round(randomNormal(random, 0, 2.4));
+      const spreadY = Math.round(randomNormal(random, 0, 1.05));
+      const tx = clamp(anchor.tx + spreadX, bounds.startTx, bounds.endTx - 1);
+      const ty = clamp(anchor.ty + spreadY, bounds.minTy, bounds.maxTy - 1);
+      const key = tileKey(tx, ty);
+      const zoneId = zoneAtX(tx * TILE).id;
+      if (localUsed.has(key)) continue;
+      if (!isShallowGardenZone(zoneId)) continue;
+      if (!isOpenWaterTile(solid, tx, ty) || !hasCreatureClearance(solid, tx, ty, 2, 1)) continue;
+
+      localUsed.add(key);
+      members.push({
+        tx,
+        ty,
+        scale: clamp(0.55 + random() * 0.45 + randomNormal(random, 0, 0.08), 0.48, 1),
+      });
+    }
+
+    if (members.length < 4) continue;
+    for (const member of members) {
+      const spawn = makeCreatureSpawn(member.tx, member.ty, zoneAtX(member.tx * TILE), "yellow-blue-fish", random, member.scale);
+      const offsetX = randomNormal(random, 0, 8);
+      const offsetY = randomNormal(random, 0, 5);
+      spawn.schoolId = school;
+      spawn.schoolOffsetX = (member.tx - anchor.tx) * TILE + offsetX;
+      spawn.schoolOffsetY = (member.ty - anchor.ty) * TILE + offsetY;
+      spawn.x = anchor.tx * TILE + 16 + spawn.schoolOffsetX;
+      spawn.y = anchor.ty * TILE + 16 + spawn.schoolOffsetY;
+      creatures.push(spawn);
+      usedCreatureTiles.add(tileKey(member.tx, member.ty));
+    }
+  }
 }
 
 function addHabitatCreatures(
@@ -2936,6 +3078,10 @@ function randomCount(random: () => number, min: number, max: number) {
   return min + Math.floor(random() * (max - min + 1));
 }
 
+function isShallowGardenZone(zoneId: OceanZoneId) {
+  return zoneId === "coral" || zoneId === "kelp";
+}
+
 function isAwayFromCreatures(usedCreatureTiles: Set<string>, tx: number, ty: number) {
   for (const key of usedCreatureTiles) {
     const [otherTx, otherTy] = key.split(",").map(Number);
@@ -2955,8 +3101,8 @@ function beachAreaBounds() {
 
 function openOceanWaterBounds() {
   return {
-    startTx: Math.floor((ZONES[1].startX + 420) / TILE),
-    endTx: Math.floor((ZONES[1].endX - 420) / TILE),
+    startTx: Math.floor((SHELF_ZONE.startX + 420) / TILE),
+    endTx: Math.floor((SHELF_ZONE.endX - 420) / TILE),
     minTy: WATERLINE_TILE + 5,
     maxTy: Math.floor(depthToY(82) / TILE),
   };
@@ -2964,8 +3110,8 @@ function openOceanWaterBounds() {
 
 function coralAndOpenOceanBounds() {
   return {
-    startTx: Math.floor((ZONES[0].startX + 240) / TILE),
-    endTx: Math.floor((ZONES[1].endX - 240) / TILE),
+    startTx: Math.floor((SEAGRASS_ZONE.startX + 240) / TILE),
+    endTx: Math.floor((SHELF_ZONE.endX - 240) / TILE),
     minTy: WATERLINE_TILE + 4,
     maxTy: Math.floor(depthToY(118) / TILE),
   };
@@ -2973,7 +3119,7 @@ function coralAndOpenOceanBounds() {
 
 function dropoffWaterBounds() {
   return {
-    startTx: Math.floor((ZONES[2].startX + 360) / TILE),
+    startTx: Math.floor((DEEP_ZONE.startX + 360) / TILE),
     endTx: GRID_W - 12,
     minTy: Math.floor(depthToY(120) / TILE),
     maxTy: Math.floor(depthToY(430) / TILE),
@@ -2983,7 +3129,7 @@ function dropoffWaterBounds() {
 function coralGardenBounds() {
   return {
     startTx: Math.floor((BEACH_END_X + 540) / TILE),
-    endTx: Math.floor((ZONES[0].endX - 160) / TILE),
+    endTx: Math.floor((KELP_ZONE.endX - 160) / TILE),
     minTy: WATERLINE_TILE + 3,
     maxTy: Math.floor(GRID_H * 0.72),
   };
@@ -3045,7 +3191,7 @@ function makeCreatureSpawn(
     x: tx * TILE + 16,
     y: ty * TILE + 16,
     assetKey,
-    drift: 12 + random() * 34,
+    drift: assetKey === "yellow-blue-fish" ? 260 + random() * 420 : 12 + random() * 34,
     scale: scaleOverride ?? creatureScale(assetKey, random),
     zoneId: zone.id,
   };
@@ -3059,8 +3205,9 @@ function creatureScale(assetKey: CreatureKey, random: () => number) {
     nudhhi: 0.34,
     seadragon: 0.44,
     "smooth-sting-ray": 0.68,
+    "yellow-blue-fish": 1,
   };
-  const spread = assetKey === "killer-whale" ? 0.08 : 0.16;
+  const spread = assetKey === "killer-whale" || assetKey === "yellow-blue-fish" ? 0.08 : 0.16;
   return Math.max(0.18, means[assetKey] * (1 + randomNormal(random, 0, spread)));
 }
 
