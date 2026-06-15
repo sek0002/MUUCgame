@@ -54,6 +54,18 @@
           <button id="dev-fit" type="button" title="Fit world">[]</button>
           <button id="dev-player" type="button" title="Follow player">@</button>
           <button id="dev-teleport" type="button" title="Teleport player to dev view center">TP</button>
+          <label class="dev-select" title="Performance profile">
+            <span>Profile</span>
+            <select id="dev-profile">
+              <option value="desktop">Desktop</option>
+              <option value="mobile">Mobile</option>
+            </select>
+          </label>
+          <label class="dev-seed dev-resolution" title="Render height">
+            <span>Res</span>
+            <input id="dev-render-height" type="number" min="360" max="1080" step="60" value="720" />
+          </label>
+          <button id="dev-render-apply" type="button" title="Apply render height">Set</button>
           <label class="dev-slider" title="World X">
             <span>X</span>
             <input id="dev-x-range" type="range" min="0" max="50000" value="0" />

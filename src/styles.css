@@ -291,6 +291,7 @@ canvas {
   --dev-pad-x: clamp(5px, 0.9vw, 8px);
   --dev-slider-width: clamp(76px, 11vw, 112px);
   --dev-seed-width: clamp(64px, 8vw, 82px);
+  --dev-select-width: clamp(74px, 9vw, 92px);
   --dev-readout-width: clamp(132px, 17vw, 184px);
 }
 
@@ -365,6 +366,26 @@ canvas {
 
 .dev-seed input {
   width: var(--dev-seed-width);
+  min-width: 0;
+  border: 1px solid rgba(155, 228, 219, 0.34);
+  background: rgba(2, 12, 18, 0.68);
+  color: #d8fff6;
+  font: inherit;
+  font-size: var(--dev-font-size);
+}
+
+.dev-select {
+  display: grid;
+  grid-template-columns: auto var(--dev-select-width);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--dev-font-size);
+  color: #97d8cd;
+}
+
+.dev-select select {
+  width: var(--dev-select-width);
   min-width: 0;
   border: 1px solid rgba(155, 228, 219, 0.34);
   background: rgba(2, 12, 18, 0.68);
@@ -524,6 +545,7 @@ canvas {
     align-items: flex-start;
     --dev-slider-width: clamp(52px, 15vw, 88px);
     --dev-seed-width: clamp(52px, 16vw, 70px);
+    --dev-select-width: clamp(64px, 18vw, 78px);
     --dev-readout-width: clamp(118px, 34vw, 150px);
   }
 
@@ -547,6 +569,15 @@ canvas {
   }
 
   .dev-seed input {
+    width: 100%;
+  }
+
+  .dev-select {
+    flex: 0 1 118px;
+    grid-template-columns: auto minmax(64px, 1fr);
+  }
+
+  .dev-select select {
     width: 100%;
   }
 

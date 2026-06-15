@@ -11,20 +11,30 @@ type WebkitFullscreenElement = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void> | void;
 };
 
+declare global {
+  interface Window {
+    getGameRenderHeight?: () => number;
+    setGameRenderHeight?: (height: number) => number;
+  }
+}
+
 const fullscreenDocument = document as WebkitFullscreenDocument;
 
 const fullscreenElement = () =>
   document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement ?? null;
 
-const RENDER_HEIGHT = 720;
+const DEFAULT_RENDER_HEIGHT = 720;
+const MIN_RENDER_HEIGHT = 360;
+const MAX_RENDER_HEIGHT = 1080;
 const MIN_RENDER_WIDTH = 360;
+let renderHeight = DEFAULT_RENDER_HEIGHT;
 
 const getRenderSize = () => {
   const aspect = window.innerWidth / Math.max(1, window.innerHeight);
 
   return {
-    width: Math.max(MIN_RENDER_WIDTH, Math.round(RENDER_HEIGHT * aspect)),
-    height: RENDER_HEIGHT,
+    width: Math.max(MIN_RENDER_WIDTH, Math.round(renderHeight * aspect)),
+    height: renderHeight,
   };
 };
 
@@ -94,6 +104,14 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+
+window.setGameRenderHeight = (height: number) => {
+  renderHeight = Phaser.Math.Clamp(Math.round(height), MIN_RENDER_HEIGHT, MAX_RENDER_HEIGHT);
+  const nextRenderSize = getRenderSize();
+  game.scale.setGameSize(nextRenderSize.width, nextRenderSize.height);
+  return renderHeight;
+};
+window.getGameRenderHeight = () => renderHeight;
 
 window.addEventListener("resize", () => {
   const nextRenderSize = getRenderSize();

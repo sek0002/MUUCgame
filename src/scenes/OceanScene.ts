@@ -25,6 +25,7 @@ import {
 type KeySet = Record<"left" | "right" | "up" | "down", Phaser.Input.Keyboard.Key>;
 type TouchControl = keyof KeySet;
 type HeroVisibilityStatus = "visible" | "hidden";
+type PerformanceProfile = "desktop" | "mobile";
 type FinalBiomeBackgroundLayer = {
   image: Phaser.GameObjects.Image;
   mask: Phaser.GameObjects.Graphics;
@@ -62,6 +63,9 @@ type DevCameraTools = {
   teleport: HTMLButtonElement;
   xRange: HTMLInputElement;
   yRange: HTMLInputElement;
+  profileSelect: HTMLSelectElement;
+  renderHeightInput: HTMLInputElement;
+  renderApply: HTMLButtonElement;
   seedInput: HTMLInputElement;
   seedApply: HTMLButtonElement;
   seedRandom: HTMLButtonElement;
@@ -118,8 +122,10 @@ const FINAL_BIOME_BACKGROUND_SCROLL_DRIFT_Y = 0.05;
 const FINAL_BIOME_BACKGROUND_RESPONSE = 0.045;
 const FINAL_BIOME_BACKGROUND_SCALE = 0.42;
 const FINAL_BIOME_BACKGROUND_ZOOM_OUT = 0.68;
-const FINAL_BIOME_BACKGROUND_KEY = "final-background-combined";
-const FINAL_BIOME_BACKGROUND_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix.png";
+const FINAL_BIOME_BACKGROUND_DESKTOP_KEY = "final-background-combined";
+const FINAL_BIOME_BACKGROUND_MOBILE_KEY = "final-background-combined-mobile";
+const FINAL_BIOME_BACKGROUND_DESKTOP_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix.png";
+const FINAL_BIOME_BACKGROUND_MOBILE_URL = "/assets/landscape/coral-area/finalbackgrounds/combined-seamfix-mobile.png";
 const FINAL_BIOME_SEAGRASS_IMAGE_END = 0.25;
 const FINAL_BIOME_KELP_IMAGE_END = 2 / 3;
 const DISTAL_WATER_COLUMN_KEY = "distal-water-column-imagegen";
@@ -218,7 +224,7 @@ const DISTAL_WATER_COLUMN_TILES = CORAL_BACKGROUND_TILES.map((tile, index) => {
 });
 const SEAGRASS_MEADOW_ROW_COUNT = 4;
 const SEAGRASS_MEADOW_SCALE_FACTOR = 0.25;
-const SEAGRASS_MEADOW_DENSITY_FACTOR = 0.4;
+const SEAGRASS_MEADOW_DENSITY_FACTOR = 0.25;
 const SEAGRASS_HIDE_DISTANCE_FROM_FLOOR = 180;
 const SEAGRASS_TERRAIN_SLOPE_SAMPLE = TILE * 2.5;
 const SEAGRASS_MAX_TERRAIN_ROTATION = 0.58;
@@ -297,6 +303,7 @@ export class OceanScene extends Phaser.Scene {
   private caveSeed = DEFAULT_CAVE_SEED;
   private caveTiles = new Set<string>();
   private loadingScreenStartedAt = 0;
+  private performanceProfile: PerformanceProfile = this.defaultPerformanceProfile();
   private devCameraDragStart?: {
     pointerX: number;
     pointerY: number;
@@ -347,7 +354,7 @@ export class OceanScene extends Phaser.Scene {
     }
     this.load.image("shipwreck", assetUrl("/assets/landscape/shipwreck.png"));
     this.load.image("beach-house-only", assetUrl("/assets/landscape/beach-house-only.png"));
-    this.load.image(FINAL_BIOME_BACKGROUND_KEY, assetUrl(FINAL_BIOME_BACKGROUND_URL));
+    this.load.image(this.finalBiomeBackgroundKey(), assetUrl(this.finalBiomeBackgroundUrl()));
     if (SHOW_CORAL_BACKGROUND_REVIEW_ASSET) {
       for (const tile of CORAL_BACKGROUND_TILES) {
         this.load.image(tile.key, assetUrl(tile.url));
@@ -577,7 +584,7 @@ export class OceanScene extends Phaser.Scene {
     this.finalBiomeBackgrounds = [];
 
     const image = this.add
-      .image(0, 0, FINAL_BIOME_BACKGROUND_KEY)
+      .image(0, 0, this.finalBiomeBackgroundKey())
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(FINAL_BIOME_BACKGROUND_DEPTH)
@@ -592,6 +599,49 @@ export class OceanScene extends Phaser.Scene {
     });
 
     this.updateFinalBiomeBackgrounds();
+  }
+
+  private defaultPerformanceProfile(): PerformanceProfile {
+    if (typeof window === "undefined") return "desktop";
+    return window.matchMedia("(hover: none), (pointer: coarse)").matches ? "mobile" : "desktop";
+  }
+
+  private finalBiomeBackgroundKey() {
+    return this.performanceProfile === "mobile"
+      ? FINAL_BIOME_BACKGROUND_MOBILE_KEY
+      : FINAL_BIOME_BACKGROUND_DESKTOP_KEY;
+  }
+
+  private finalBiomeBackgroundUrl() {
+    return this.performanceProfile === "mobile"
+      ? FINAL_BIOME_BACKGROUND_MOBILE_URL
+      : FINAL_BIOME_BACKGROUND_DESKTOP_URL;
+  }
+
+  private setPerformanceProfile(profile: PerformanceProfile) {
+    if (this.performanceProfile === profile) return;
+    this.performanceProfile = profile;
+    const applyProfile = () => {
+      for (const layer of this.finalBiomeBackgrounds) {
+        layer.image.setTexture(this.finalBiomeBackgroundKey());
+        layer.offset.x = 0;
+        layer.offset.y = 0;
+        layer.scrollOffset.y = 0;
+        layer.lastScroll = undefined;
+      }
+      this.updateFinalBiomeBackgrounds();
+      this.updateDeveloperToolState();
+      this.updateDeveloperToolReadout();
+    };
+
+    if (!this.textures.exists(this.finalBiomeBackgroundKey())) {
+      this.load.image(this.finalBiomeBackgroundKey(), assetUrl(this.finalBiomeBackgroundUrl()));
+      this.load.once("complete", applyProfile);
+      this.load.start();
+      return;
+    }
+
+    applyProfile();
   }
 
   private shallowGardenDisplayZone(zones: OceanZone[]) {
@@ -3095,6 +3145,9 @@ export class OceanScene extends Phaser.Scene {
     const teleport = document.getElementById("dev-teleport");
     const xRange = document.getElementById("dev-x-range");
     const yRange = document.getElementById("dev-y-range");
+    const profileSelect = document.getElementById("dev-profile");
+    const renderHeightInput = document.getElementById("dev-render-height");
+    const renderApply = document.getElementById("dev-render-apply");
     const seedInput = document.getElementById("cave-seed-input");
     const seedApply = document.getElementById("cave-seed-apply");
     const seedRandom = document.getElementById("cave-seed-random");
@@ -3110,6 +3163,9 @@ export class OceanScene extends Phaser.Scene {
       !(teleport instanceof HTMLButtonElement) ||
       !(xRange instanceof HTMLInputElement) ||
       !(yRange instanceof HTMLInputElement) ||
+      !(profileSelect instanceof HTMLSelectElement) ||
+      !(renderHeightInput instanceof HTMLInputElement) ||
+      !(renderApply instanceof HTMLButtonElement) ||
       !(seedInput instanceof HTMLInputElement) ||
       !(seedApply instanceof HTMLButtonElement) ||
       !(seedRandom instanceof HTMLButtonElement) ||
@@ -3120,8 +3176,27 @@ export class OceanScene extends Phaser.Scene {
 
     xRange.max = String(WORLD_WIDTH);
     yRange.max = String(WORLD_HEIGHT);
+    profileSelect.value = this.performanceProfile;
+    renderHeightInput.value = String(window.getGameRenderHeight?.() ?? 720);
     seedInput.value = String(this.caveSeed);
-    this.devCameraTools = { root, toggle, zoomIn, zoomOut, fit, player, teleport, xRange, yRange, seedInput, seedApply, seedRandom, readout };
+    this.devCameraTools = {
+      root,
+      toggle,
+      zoomIn,
+      zoomOut,
+      fit,
+      player,
+      teleport,
+      xRange,
+      yRange,
+      profileSelect,
+      renderHeightInput,
+      renderApply,
+      seedInput,
+      seedApply,
+      seedRandom,
+      readout,
+    };
 
     toggle.onclick = () => this.setDeveloperCameraEnabled(!this.devCameraEnabled);
     zoomIn.onclick = () => {
@@ -3150,6 +3225,14 @@ export class OceanScene extends Phaser.Scene {
     yRange.oninput = () => {
       this.setDeveloperCameraEnabled(true);
       this.centerDeveloperCamera(this.getDeveloperCameraCenter().x, Number(yRange.value));
+    };
+    profileSelect.onchange = () => {
+      this.setPerformanceProfile(profileSelect.value === "mobile" ? "mobile" : "desktop");
+    };
+    renderApply.onclick = () => {
+      const appliedHeight = window.setGameRenderHeight?.(Number(renderHeightInput.value)) ?? Number(renderHeightInput.value);
+      renderHeightInput.value = String(appliedHeight);
+      this.updateDeveloperToolReadout();
     };
     seedApply.onclick = () => this.restartWithCaveSeed(Number(seedInput.value));
     seedRandom.onclick = () => {
@@ -3263,6 +3346,8 @@ export class OceanScene extends Phaser.Scene {
     if (!this.devCameraTools) return;
     this.devCameraTools.root.classList.toggle("is-active", this.devCameraEnabled);
     this.devCameraTools.toggle.setAttribute("aria-pressed", String(this.devCameraEnabled));
+    this.devCameraTools.profileSelect.value = this.performanceProfile;
+    this.devCameraTools.renderHeightInput.value = String(window.getGameRenderHeight?.() ?? Number(this.devCameraTools.renderHeightInput.value));
     this.touchJoystickElements?.root.classList.toggle("dev-nav", this.devCameraEnabled);
     this.terrainGuideLayer?.setVisible(this.devCameraEnabled);
     this.updateCaveVisibility();
@@ -3275,9 +3360,10 @@ export class OceanScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const centerX = Math.round(Phaser.Math.Clamp(center.x, 0, WORLD_WIDTH));
     const centerY = Math.round(Phaser.Math.Clamp(center.y, 0, WORLD_HEIGHT));
+    const renderHeight = window.getGameRenderHeight?.() ?? camera.height;
     this.devCameraTools.xRange.value = String(centerX);
     this.devCameraTools.yRange.value = String(centerY);
-    this.devCameraTools.readout.textContent = `x ${centerX} y ${centerY} z ${camera.zoom.toFixed(2)} vis ${this.heroVisibilityStatus}`;
+    this.devCameraTools.readout.textContent = `x ${centerX} y ${centerY} z ${camera.zoom.toFixed(2)} ${this.performanceProfile} ${renderHeight}p vis ${this.heroVisibilityStatus}`;
   }
 
   private teleportHeroTo(x: number, y: number) {
