@@ -205,11 +205,12 @@ const DUSKY_MORWONG_IDLE_MAX_ROTATION_DEGREES = 2.4;
 const BULL_RAY_SWIM_KEY = "bull-ray-side-swim";
 const BULL_RAY_BASE_WIDTH = HERO_RENDER_WIDTH * 1.5;
 const BULL_RAY_DEPTH = -3.56;
-const BULL_RAY_MIN_CRUISE_SPEED = 12;
-const BULL_RAY_MAX_CRUISE_SPEED = 23;
-const BULL_RAY_ACCEL_DURATION = 1200;
-const BULL_RAY_DECEL_DURATION = 1500;
-const BULL_RAY_MIN_GLIDE_DISTANCE = 1100;
+const BULL_RAY_MIN_CRUISE_SPEED = 10;
+const BULL_RAY_MAX_CRUISE_SPEED = 17;
+const BULL_RAY_MIN_GLIDE_DISTANCE = 360;
+const BULL_RAY_MAX_GLIDE_DISTANCE = 820;
+const BULL_RAY_MIN_GLIDE_PAUSE = 420;
+const BULL_RAY_MAX_GLIDE_PAUSE = 1200;
 const BULL_RAY_MIN_REST_DURATION = 8500;
 const BULL_RAY_MAX_REST_DURATION = 17000;
 const BULL_RAY_REST_CHANCE = 0.28;
@@ -561,8 +562,8 @@ export class OceanScene extends Phaser.Scene {
     this.createLightingOverlay();
 
     this.physics.add.collider(this.hero, this.rocks);
+    this.cameras.main.centerOn(this.hero.x, this.hero.y);
     this.applyHeroCameraFollowSettings(true);
-    this.cameras.main.fadeIn(450, 5, 20, 31);
     this.hideLoadingScreen();
   }
 
@@ -3035,34 +3036,6 @@ export class OceanScene extends Phaser.Scene {
           : this.seagrassCreatureTrackYAt(spawn.x, CREATURE_SEAGRASS_TRACK_MARGIN + 8);
       graphics.fillStyle(color, 0.72);
       graphics.fillRect(spawn.x - 10, trackY - 0.5, 20, 1);
-    } else if (spawn.assetKey === "yellow-blue-fish") {
-      graphics.lineStyle(1, color, 0.52);
-      this.strokeDottedVerticalCreatureTrack(
-        graphics,
-        spawn.x,
-        spawn.y,
-        this.creatureTerrainGuideYAt(spawn.x) - CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE,
-        5,
-        8,
-      );
-    }
-  }
-
-  private strokeDottedVerticalCreatureTrack(
-    graphics: Phaser.GameObjects.Graphics,
-    x: number,
-    startY: number,
-    endY: number,
-    step: number,
-    dashLength: number,
-  ) {
-    const direction = endY >= startY ? 1 : -1;
-    for (let y = startY; direction > 0 ? y <= endY : y >= endY; y += step * direction) {
-      const dashEndY = direction > 0 ? Math.min(y + dashLength, endY) : Math.max(y - dashLength, endY);
-      graphics.beginPath();
-      graphics.moveTo(x, y);
-      graphics.lineTo(x, dashEndY);
-      graphics.strokePath();
     }
   }
 
@@ -3725,7 +3698,7 @@ export class OceanScene extends Phaser.Scene {
       const target = this.bullRayTarget(current, corridor, spawn.drift);
       this.bullRayGlide(sprite, current, target, spawn.assetKey, () => {
         current = this.bullRaySafePoint(target.x, target.y, corridor, "cruise");
-        this.time.delayedCall(Phaser.Math.Between(900, 2600), scheduleNext);
+        this.time.delayedCall(Phaser.Math.Between(BULL_RAY_MIN_GLIDE_PAUSE, BULL_RAY_MAX_GLIDE_PAUSE), scheduleNext);
       });
     };
 
@@ -3758,7 +3731,7 @@ export class OceanScene extends Phaser.Scene {
     const distance = Phaser.Math.Clamp(
       Math.max(BULL_RAY_MIN_GLIDE_DISTANCE, drift * Phaser.Math.FloatBetween(0.62, 1.05)),
       BULL_RAY_MIN_GLIDE_DISTANCE,
-      Math.max(BULL_RAY_MIN_GLIDE_DISTANCE, corridor.maxX - corridor.minX - 180),
+      Math.min(BULL_RAY_MAX_GLIDE_DISTANCE, Math.max(BULL_RAY_MIN_GLIDE_DISTANCE, corridor.maxX - corridor.minX - 180)),
     );
     const x = Phaser.Math.Clamp(current.x + randomDirection * distance, corridor.minX, corridor.maxX);
     const y = this.bullRayCruiseYAt(x, corridor) + Phaser.Math.Between(-42, 42);
@@ -3781,64 +3754,45 @@ export class OceanScene extends Phaser.Scene {
 
     const directionX: -1 | 1 = target.x >= start.x ? 1 : -1;
     const speed = Phaser.Math.Between(BULL_RAY_MIN_CRUISE_SPEED, BULL_RAY_MAX_CRUISE_SPEED);
-    const accelDistance = Phaser.Math.Clamp(distance * 0.12, 60, 180);
-    const decelDistance = Phaser.Math.Clamp(distance * 0.14, 70, 220);
-    const accelT = Phaser.Math.Clamp(accelDistance / distance, 0.04, 0.22);
-    const decelT = Phaser.Math.Clamp(1 - decelDistance / distance, accelT + 0.08, 0.94);
-    const cruiseDistance = Math.max(0, distance * (decelT - accelT));
-    const cruiseDuration = Phaser.Math.Clamp((cruiseDistance / speed) * 1000, 18000, 150000);
+    const glideDuration = Phaser.Math.Clamp((distance / speed) * 1000, 8000, 46000);
 
     const placeAt = (t: number) => {
       const point = this.creatureTrackPoint(start, target, t, Phaser.Math.Clamp(distance * 0.012, 6, 24), 0.35, 0);
       this.placeCreatureFrontOnTrack(sprite, assetKey, point, 0.3);
     };
 
-    const playImpulseAnimation = () => {
+    const setAnimationSpeed = (timeScale: number) => {
+      sprite.anims.timeScale = timeScale;
+    };
+
+    const playImpulseAnimation = (timeScale = 1) => {
       if (!sprite.anims.isPlaying) {
         sprite.play({
           key: BULL_RAY_SWIM_KEY,
           startFrame: Math.floor(Math.random() * 8),
         });
       }
+      setAnimationSpeed(timeScale);
     };
 
     const pauseAnimation = () => {
+      setAnimationSpeed(1);
       sprite.stop();
     };
 
     const progress = { t: 0 };
     this.faceSprite(sprite, assetKey, directionX);
-    playImpulseAnimation();
+    playImpulseAnimation(0.5);
     this.tweens.add({
       targets: progress,
-      t: accelT,
-      duration: BULL_RAY_ACCEL_DURATION,
-      ease: "Quad.in",
+      t: 1,
+      duration: glideDuration,
+      ease: "Sine.inOut",
       onUpdate: () => placeAt(progress.t),
       onComplete: () => {
+        placeAt(1);
         pauseAnimation();
-        this.tweens.add({
-          targets: progress,
-          t: decelT,
-          duration: cruiseDuration,
-          ease: "Linear",
-          onUpdate: () => placeAt(progress.t),
-          onComplete: () => {
-            playImpulseAnimation();
-            this.tweens.add({
-              targets: progress,
-              t: 1,
-              duration: BULL_RAY_DECEL_DURATION,
-              ease: "Quad.out",
-              onUpdate: () => placeAt(progress.t),
-              onComplete: () => {
-                placeAt(1);
-                pauseAnimation();
-                onComplete();
-              },
-            });
-          },
-        });
+        onComplete();
       },
     });
   }
