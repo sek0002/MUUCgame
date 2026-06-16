@@ -37,7 +37,9 @@ export const CREATURES = {
   },
   seadragon: {
     key: "seadragon",
-    url: assetUrl("/assets/creatures/seadragon.svg"),
+    url: assetUrl("/assets/creatures/seadragon-turn-sprite.png"),
+    frameWidth: 724,
+    frameHeight: 724,
   },
   stingray: {
     key: "smooth-sting-ray",
@@ -49,21 +51,39 @@ export const CREATURES = {
   },
   yellowBlueFish: {
     key: "yellow-blue-fish",
-    url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish.png"),
-    frames: {
-      center: {
-        key: "yellow-blue-fish",
-        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish.png"),
-      },
-      tailRight: {
-        key: "yellow-blue-fish-tail-right",
-        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish-tail-right.png"),
-      },
-      tailLeft: {
-        key: "yellow-blue-fish-tail-left",
-        url: assetUrl("/assets/creatures/pixel-art-yellow-blue-fish-tail-left.png"),
-      },
-    },
+    url: assetUrl("/assets/creatures/australian-salmon-tail-depth-sheet.png"),
+    frameWidth: 500,
+    frameHeight: 724,
+  },
+  grassWhitingPeek: {
+    key: "grass-whiting-peek",
+    url: assetUrl("/assets/creatures/fish-blue-green/blue-green-fish-peek-duck-whole-body-clean.png"),
+    frameWidth: 362,
+    frameHeight: 724,
+  },
+  grassWhitingPeck: {
+    key: "grass-whiting-peck",
+    url: assetUrl("/assets/creatures/fish-blue-green/blue-green-fish-eat-down-strip-fish-only-clean.png"),
+    frameWidth: 360,
+    frameHeight: 794,
+  },
+  kingGeorgeWhiting: {
+    key: "king-george-whiting",
+    url: assetUrl("/assets/creatures/king-george-whiting-forward-glide-sheet.png"),
+    frameWidth: 362,
+    frameHeight: 724,
+  },
+  duskyMorwong: {
+    key: "dusky-morwong",
+    url: assetUrl("/assets/creatures/fish-dusky-morwong/tail-perspective-strip.png"),
+    frameWidth: 701,
+    frameHeight: 748,
+  },
+  bullRay: {
+    key: "bull-ray",
+    url: assetUrl("/assets/creatures/bull-ray-imagegen-side-sheet.png"),
+    frameWidth: 288,
+    frameHeight: 112,
   },
 } as const;
 
@@ -71,8 +91,11 @@ export const NPC_CREATURES = [
   CREATURES.blueDevil,
   CREATURES.crayfish,
   CREATURES.killerWhale,
+  CREATURES.kingGeorgeWhiting,
   CREATURES.nudhhi,
   CREATURES.seadragon,
+  CREATURES.duskyMorwong,
+  CREATURES.bullRay,
   CREATURES.stingray,
   CREATURES.yellowBlueFish,
 ] as const;

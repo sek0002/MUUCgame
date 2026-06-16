@@ -96,7 +96,7 @@ const BUBBLE_TEXTURE_KEY = "procedural-pixel-bubble";
 const BUBBLE_COUNT = 5760;
 const BUBBLE_STREAM_COUNT = 76;
 const BUBBLE_MIN_SPACING_FROM_TERRAIN = 42;
-const HERO_RENDER_WIDTH = 92;
+const HERO_RENDER_WIDTH = 115;
 const HERO_VISIBLE_DEPTH = 20;
 const HERO_SEAGRASS_HIDDEN_DEPTH = -4.52;
 const HERO_SWIM_FRAMES = [
@@ -107,6 +107,84 @@ const HERO_SWIM_FRAMES = [
 ] as const;
 const YELLOW_BLUE_FISH_SWIM_KEY = "yellow-blue-fish-swim";
 const YELLOW_BLUE_FISH_BASE_WIDTH = 42;
+const SEADRAGON_TURN_KEY = "seadragon-turn";
+const SEADRAGON_BASE_WIDTH = 96;
+const SEADRAGON_FRAME_COUNT = 3;
+const SEADRAGON_TURN_CYCLE_DURATION = 9000;
+const SEADRAGON_MIN_DRIFT_DURATION = 9500;
+const SEADRAGON_MAX_DRIFT_DURATION = 14000;
+const SEADRAGON_MIN_DRIFT_X = 90;
+const SEADRAGON_MAX_DRIFT_X = 180;
+const SEADRAGON_MAX_DRIFT_Y = 34;
+const SEADRAGON_ROTATION_WOBBLE_MIN_DEGREES = 3;
+const SEADRAGON_ROTATION_WOBBLE_MAX_DEGREES = 11;
+const SEADRAGON_MIN_ROTATION_WOBBLE_DURATION = 7000;
+const SEADRAGON_MAX_ROTATION_WOBBLE_DURATION = 11000;
+const GRASS_WHITING_PEEK_BASE_WIDTH = 48.6;
+const GRASS_WHITING_PEEK_FRAME_COUNT = 6;
+const GRASS_WHITING_PEEK_EXTENDED_FRAME = 3;
+const GRASS_WHITING_PEEK_MIN_TRIGGER_DELAY = 1400;
+const GRASS_WHITING_PEEK_MAX_TRIGGER_DELAY = 7200;
+const GRASS_WHITING_PEEK_MIN_FRAME_DELAY = 90;
+const GRASS_WHITING_PEEK_MAX_FRAME_DELAY = 190;
+const GRASS_WHITING_PEEK_MIN_EXTENDED_HOLD = 8000;
+const GRASS_WHITING_PEEK_MAX_EXTENDED_HOLD = 12500;
+const GRASS_WHITING_PEEK_MIN_FORWARD_NUDGE = 8;
+const GRASS_WHITING_PEEK_MAX_FORWARD_NUDGE = 18;
+const GRASS_WHITING_PEEK_DEPTH = -4.56;
+const GRASS_WHITING_PEEK_ORIGIN_Y = 0.765;
+const GRASS_WHITING_PEEK_GRASS_HEIGHT_CLEARANCE = 42;
+const GRASS_WHITING_PEEK_MIN_FLOOR_LIFT = 56;
+const GRASS_WHITING_PECK_BASE_WIDTH = 36;
+const GRASS_WHITING_PECK_FRAME_COUNT = 6;
+const GRASS_WHITING_PECK_ANIMATION_DURATION = 1000;
+const GRASS_WHITING_PECK_MIN_TRIGGER_DELAY = 1800;
+const GRASS_WHITING_PECK_MAX_TRIGGER_DELAY = 8500;
+const GRASS_WHITING_PECK_MIN_DRIFT = 18;
+const GRASS_WHITING_PECK_MAX_DRIFT = 46;
+const GRASS_WHITING_PECK_DEPTH = -3.48;
+const GRASS_WHITING_PECK_ORIGIN_Y = 0.75;
+const GRASS_WHITING_PECK_GRASS_TOP_GAP = -18;
+const KING_GEORGE_WHITING_GLIDE_KEY = "king-george-whiting-forward-glide";
+const KING_GEORGE_WHITING_BASE_WIDTH = 68;
+const KING_GEORGE_WHITING_DEPTH = -3.52;
+const KING_GEORGE_WHITING_FRAME_COUNT = 6;
+const KING_GEORGE_WHITING_REST_FRAME = 0;
+const KING_GEORGE_WHITING_GLIDE_HOLD_FRAME = 5;
+const KING_GEORGE_WHITING_MIN_REST_DURATION = 6400;
+const KING_GEORGE_WHITING_MAX_REST_DURATION = 9600;
+const KING_GEORGE_WHITING_MIN_GLIDE_SPEED = 18;
+const KING_GEORGE_WHITING_MAX_GLIDE_SPEED = 28;
+const KING_GEORGE_WHITING_IDLE_DRIFT_X = 8;
+const KING_GEORGE_WHITING_IDLE_DRIFT_Y = 5;
+const KING_GEORGE_WHITING_IDLE_MIN_DURATION = 3800;
+const KING_GEORGE_WHITING_IDLE_MAX_DURATION = 7600;
+const KING_GEORGE_WHITING_IDLE_MAX_ROTATION_DEGREES = 3.5;
+const DUSKY_MORWONG_SWIM_KEY = "dusky-morwong-tail-perspective";
+const DUSKY_MORWONG_BASE_WIDTH = 71.5;
+const DUSKY_MORWONG_DEPTH = -3.42;
+const DUSKY_MORWONG_MIN_REST_DURATION = 10000;
+const DUSKY_MORWONG_MAX_REST_DURATION = 20000;
+const DUSKY_MORWONG_MIN_SWIM_DISTANCE = 620;
+const DUSKY_MORWONG_MIN_SPEED = 18;
+const DUSKY_MORWONG_MAX_SPEED = 31;
+const DUSKY_MORWONG_IDLE_DRIFT_X = 14;
+const DUSKY_MORWONG_IDLE_DRIFT_Y = 8;
+const DUSKY_MORWONG_IDLE_MIN_DURATION = 5200;
+const DUSKY_MORWONG_IDLE_MAX_DURATION = 11000;
+const DUSKY_MORWONG_IDLE_MAX_ROTATION_DEGREES = 2.4;
+const BULL_RAY_SWIM_KEY = "bull-ray-side-swim";
+const BULL_RAY_BASE_WIDTH = HERO_RENDER_WIDTH * 1.5;
+const BULL_RAY_DEPTH = -3.56;
+const BULL_RAY_MIN_CRUISE_SPEED = 12;
+const BULL_RAY_MAX_CRUISE_SPEED = 23;
+const BULL_RAY_ACCEL_DURATION = 1200;
+const BULL_RAY_DECEL_DURATION = 1500;
+const BULL_RAY_MIN_GLIDE_DISTANCE = 1100;
+const BULL_RAY_MIN_REST_DURATION = 8500;
+const BULL_RAY_MAX_REST_DURATION = 17000;
+const BULL_RAY_REST_CHANCE = 0.28;
+const SEAGRASS_MEADOW_SOURCE_HEIGHT = 526;
 const CORAL_BACKGROUND_DISPLAY_WIDTH = 9820;
 const CORAL_BACKGROUND_DISPLAY_HEIGHT = 1946;
 const CORAL_BACKGROUND_TILE_WIDTH = 512;
@@ -116,6 +194,8 @@ const SHOW_IMAGEGEN_PARALLAX_OVERLAY = false;
 const SHOW_DISTAL_WATER_COLUMN = false;
 const FINAL_BIOME_BACKGROUND_DEPTH = -56.6;
 const FINAL_BIOME_BACKGROUND_ALPHA = 0.92;
+const FINAL_BIOME_BACKGROUND_FADE_START_X = BEACH_END_X - 240;
+const FINAL_BIOME_BACKGROUND_FADE_END_X = BEACH_END_X + 1320;
 const FINAL_BIOME_BACKGROUND_VIEW_MARGIN = 420;
 const FINAL_BIOME_BACKGROUND_EDGE_PADDING = 12;
 const FINAL_BIOME_BACKGROUND_SCROLL_DRIFT_Y = 0.05;
@@ -342,11 +422,44 @@ export class OceanScene extends Phaser.Scene {
     for (const creature of NPC_CREATURES.filter((creature) => creature.url.endsWith(".svg"))) {
       this.load.svg(creature.key, creature.url, { width: 96, height: 96 });
     }
-    for (const creature of NPC_CREATURES.filter((creature) => !creature.url.endsWith(".svg"))) {
+    for (const creature of NPC_CREATURES.filter((creature) => (
+      !creature.url.endsWith(".svg") &&
+      creature.key !== CREATURES.seadragon.key &&
+      creature.key !== CREATURES.duskyMorwong.key &&
+      creature.key !== CREATURES.bullRay.key &&
+      creature.key !== CREATURES.kingGeorgeWhiting.key &&
+      creature.key !== CREATURES.yellowBlueFish.key
+    ))) {
       this.load.image(creature.key, creature.url);
     }
-    this.load.image(CREATURES.yellowBlueFish.frames.tailRight.key, CREATURES.yellowBlueFish.frames.tailRight.url);
-    this.load.image(CREATURES.yellowBlueFish.frames.tailLeft.key, CREATURES.yellowBlueFish.frames.tailLeft.url);
+    this.load.spritesheet(CREATURES.seadragon.key, CREATURES.seadragon.url, {
+      frameWidth: CREATURES.seadragon.frameWidth,
+      frameHeight: CREATURES.seadragon.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.yellowBlueFish.key, CREATURES.yellowBlueFish.url, {
+      frameWidth: CREATURES.yellowBlueFish.frameWidth,
+      frameHeight: CREATURES.yellowBlueFish.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.grassWhitingPeek.key, CREATURES.grassWhitingPeek.url, {
+      frameWidth: CREATURES.grassWhitingPeek.frameWidth,
+      frameHeight: CREATURES.grassWhitingPeek.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.grassWhitingPeck.key, CREATURES.grassWhitingPeck.url, {
+      frameWidth: CREATURES.grassWhitingPeck.frameWidth,
+      frameHeight: CREATURES.grassWhitingPeck.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.kingGeorgeWhiting.key, CREATURES.kingGeorgeWhiting.url, {
+      frameWidth: CREATURES.kingGeorgeWhiting.frameWidth,
+      frameHeight: CREATURES.kingGeorgeWhiting.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.duskyMorwong.key, CREATURES.duskyMorwong.url, {
+      frameWidth: CREATURES.duskyMorwong.frameWidth,
+      frameHeight: CREATURES.duskyMorwong.frameHeight,
+    });
+    this.load.spritesheet(CREATURES.bullRay.key, CREATURES.bullRay.url, {
+      frameWidth: CREATURES.bullRay.frameWidth,
+      frameHeight: CREATURES.bullRay.frameHeight,
+    });
     for (const variant of SEAGRASS_MEADOW_VARIANTS) {
       for (const frame of variant.frames) {
         this.load.image(frame.key, frame.url);
@@ -588,7 +701,7 @@ export class OceanScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(FINAL_BIOME_BACKGROUND_DEPTH)
-      .setAlpha(FINAL_BIOME_BACKGROUND_ALPHA);
+      .setAlpha(0);
     const mask = this.add.graphics().setScrollFactor(0).setVisible(false);
     image.setMask(mask.createGeometryMask());
     this.finalBiomeBackgrounds.push({
@@ -1001,15 +1114,25 @@ export class OceanScene extends Phaser.Scene {
     const startX = 0;
     const endX = Math.min(BEACH_SHELF_END_X + 220, 2700);
 
-    surf.fillStyle(0x77d7dc, 0.42);
-    const washPoints = [new Phaser.Geom.Point(startX, WATERLINE_Y - 6)];
-    for (let x = startX; x <= endX; x += 54) {
+    for (let x = startX; x < endX; x += 54) {
+      const nextX = Math.min(endX, x + 54);
+      const fade = 1 - this.smooth01(x / endX);
       const shelfY = this.beachShelfYAt(x);
-      const edgeY = Phaser.Math.Linear(WATERLINE_Y - 4, shelfY - 74, this.smooth01(x / endX));
-      washPoints.push(new Phaser.Geom.Point(x, edgeY + Math.sin(x * 0.014) * 5));
+      const nextShelfY = this.beachShelfYAt(nextX);
+      const edgeY = Phaser.Math.Linear(WATERLINE_Y - 4, shelfY - 74, this.smooth01(x / endX)) + Math.sin(x * 0.014) * 5;
+      const nextEdgeY = Phaser.Math.Linear(WATERLINE_Y - 4, nextShelfY - 74, this.smooth01(nextX / endX)) + Math.sin(nextX * 0.014) * 5;
+      const color = this.mixHexColor(0x77d7dc, this.depthColorAtY((edgeY + nextEdgeY) / 2), 1 - fade);
+      surf.fillStyle(color, Phaser.Math.Linear(0.34, 0.02, 1 - fade));
+      surf.fillPoints(
+        [
+          new Phaser.Geom.Point(x, WATERLINE_Y - 6),
+          new Phaser.Geom.Point(nextX, WATERLINE_Y - 7),
+          new Phaser.Geom.Point(nextX, nextEdgeY),
+          new Phaser.Geom.Point(x, edgeY),
+        ],
+        true,
+      );
     }
-    washPoints.push(new Phaser.Geom.Point(endX, WATERLINE_Y - 8));
-    surf.fillPoints(washPoints, true);
 
     for (let i = 0; i < 44; i += 1) {
       const x = 24 + i * 54;
@@ -2484,9 +2607,12 @@ export class OceanScene extends Phaser.Scene {
     assetKey: CreatureKey;
     drift: number;
     scale: number;
+    directionX?: -1 | 1;
+    rotation?: number;
     schoolId?: number;
     schoolOffsetX?: number;
     schoolOffsetY?: number;
+    zoneId?: OceanZone["id"];
   }>) {
     const yellowBlueFishSchools = new Map<number, {
       motion: { x: number; y: number };
@@ -2499,17 +2625,49 @@ export class OceanScene extends Phaser.Scene {
     }>();
 
     for (const spawn of creatures) {
-      const asset = NPC_CREATURES.find((creature) => creature.key === spawn.assetKey);
+      const asset = spawn.assetKey === "grass-whiting-peek" || spawn.assetKey === "grass-whiting-peck" || spawn.assetKey === "king-george-whiting" || spawn.assetKey === "dusky-morwong"
+        ? spawn.assetKey === "grass-whiting-peek"
+          ? CREATURES.grassWhitingPeek
+          : spawn.assetKey === "grass-whiting-peck"
+            ? CREATURES.grassWhitingPeck
+            : spawn.assetKey === "king-george-whiting"
+                ? CREATURES.kingGeorgeWhiting
+                : CREATURES.duskyMorwong
+        : NPC_CREATURES.find((creature) => creature.key === spawn.assetKey);
       if (!asset) continue;
       const sprite =
         spawn.assetKey === "yellow-blue-fish"
-          ? this.add.sprite(spawn.x, spawn.y, CREATURES.yellowBlueFish.frames.tailRight.key)
+          ? this.add.sprite(spawn.x, spawn.y, CREATURES.yellowBlueFish.key, 2)
+          : spawn.assetKey === "seadragon"
+            ? this.add.sprite(spawn.x, spawn.y, CREATURES.seadragon.key, 1)
+          : spawn.assetKey === "grass-whiting-peek"
+            ? this.add.sprite(spawn.x, spawn.y, CREATURES.grassWhitingPeek.key, 0)
+            : spawn.assetKey === "grass-whiting-peck"
+              ? this.add.sprite(spawn.x, spawn.y, CREATURES.grassWhitingPeck.key, 0)
+              : spawn.assetKey === "king-george-whiting"
+                ? this.add.sprite(spawn.x, spawn.y, CREATURES.kingGeorgeWhiting.key, KING_GEORGE_WHITING_REST_FRAME)
+                : spawn.assetKey === "dusky-morwong"
+                  ? this.add.sprite(spawn.x, spawn.y, CREATURES.duskyMorwong.key, 1)
+                  : spawn.assetKey === "bull-ray"
+                    ? this.add.sprite(spawn.x, spawn.y, CREATURES.bullRay.key, 0)
           : this.add.image(spawn.x, spawn.y, asset.key);
 
       sprite
         .setOrigin(0.5, this.creatureOriginY(spawn.assetKey))
         .setScale(this.creatureRenderScale(sprite, spawn.assetKey, spawn.scale))
-        .setDepth(4)
+        .setDepth(
+          spawn.assetKey === "grass-whiting-peek"
+            ? GRASS_WHITING_PEEK_DEPTH
+            : spawn.assetKey === "grass-whiting-peck"
+              ? GRASS_WHITING_PECK_DEPTH
+              : spawn.assetKey === "king-george-whiting"
+                ? KING_GEORGE_WHITING_DEPTH
+                : spawn.assetKey === "dusky-morwong"
+                  ? DUSKY_MORWONG_DEPTH
+                  : spawn.assetKey === "bull-ray"
+                    ? BULL_RAY_DEPTH
+              : 4,
+        )
         .setAlpha(0.94);
 
       if (spawn.assetKey === "yellow-blue-fish" && sprite instanceof Phaser.GameObjects.Sprite) {
@@ -2519,7 +2677,38 @@ export class OceanScene extends Phaser.Scene {
         });
       }
 
-      this.faceSprite(sprite, spawn.assetKey, 1);
+      if (spawn.assetKey === "seadragon" && sprite instanceof Phaser.GameObjects.Sprite) {
+        sprite.play({
+          key: SEADRAGON_TURN_KEY,
+          startFrame: Math.floor(Math.random() * SEADRAGON_FRAME_COUNT),
+        });
+      }
+
+      if (spawn.assetKey === "seadragon") {
+        this.faceSeadragon(sprite, spawn.directionX ?? -1);
+      } else {
+        this.faceSprite(sprite, spawn.assetKey, spawn.directionX ?? 1);
+      }
+
+      if (spawn.assetKey === "grass-whiting-peek" && sprite instanceof Phaser.GameObjects.Sprite) {
+        sprite.setY(this.grassWhitingPeekRestYAt(spawn.x));
+        sprite.setRotation(spawn.rotation ?? 0);
+        this.scheduleGrassWhitingPeek(sprite);
+        continue;
+      }
+
+      if (spawn.assetKey === "grass-whiting-peck" && sprite instanceof Phaser.GameObjects.Sprite) {
+        sprite.setY(this.grassWhitingPeckRestYAt(spawn.x));
+        sprite.setRotation(spawn.rotation ?? 0);
+        this.addGrassWhitingPeckDrift(sprite);
+        this.scheduleGrassWhitingPeck(sprite, spawn.directionX ?? 1);
+        continue;
+      }
+
+      if (spawn.assetKey === "king-george-whiting" && sprite instanceof Phaser.GameObjects.Sprite) {
+        this.addKingGeorgeWhitingGlide(sprite, spawn);
+        continue;
+      }
 
       if (spawn.assetKey === "yellow-blue-fish" && sprite instanceof Phaser.GameObjects.Sprite) {
         const schoolId = spawn.schoolId ?? Math.floor(spawn.x);
@@ -2533,6 +2722,21 @@ export class OceanScene extends Phaser.Scene {
         school.drift = Math.max(school.drift, spawn.drift);
         school.members.push({ sprite, offsetX, offsetY });
         yellowBlueFishSchools.set(schoolId, school);
+        continue;
+      }
+
+      if (spawn.assetKey === "seadragon" && sprite instanceof Phaser.GameObjects.Sprite) {
+        this.addSeadragonDrift(sprite, spawn);
+        continue;
+      }
+
+      if (spawn.assetKey === "dusky-morwong" && sprite instanceof Phaser.GameObjects.Sprite) {
+        this.addDuskyMorwongRoam(sprite, spawn);
+        continue;
+      }
+
+      if (spawn.assetKey === "bull-ray" && sprite instanceof Phaser.GameObjects.Sprite) {
+        this.addBullRayRoam(sprite, spawn);
         continue;
       }
 
@@ -2551,18 +2755,370 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private createCreatureAnimations() {
-    if (this.anims.exists(YELLOW_BLUE_FISH_SWIM_KEY)) return;
-    this.anims.create({
-      key: YELLOW_BLUE_FISH_SWIM_KEY,
-      frames: [
-        { key: CREATURES.yellowBlueFish.frames.tailRight.key },
-        { key: CREATURES.yellowBlueFish.frames.center.key },
-        { key: CREATURES.yellowBlueFish.frames.tailLeft.key },
-        { key: CREATURES.yellowBlueFish.frames.center.key },
-      ],
-      frameRate: 8,
-      repeat: -1,
-    });
+    this.textures.get(CREATURES.seadragon.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.yellowBlueFish.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.grassWhitingPeek.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.grassWhitingPeck.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.kingGeorgeWhiting.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.duskyMorwong.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(CREATURES.bullRay.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (!this.anims.exists(YELLOW_BLUE_FISH_SWIM_KEY)) {
+      this.anims.create({
+        key: YELLOW_BLUE_FISH_SWIM_KEY,
+        frames: this.anims.generateFrameNumbers(CREATURES.yellowBlueFish.key, {
+          frames: [0, 1, 2, 3, 4, 3, 2, 1],
+        }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists(SEADRAGON_TURN_KEY)) {
+      this.anims.create({
+        key: SEADRAGON_TURN_KEY,
+        frames: this.anims.generateFrameNumbers(CREATURES.seadragon.key, { frames: [0, 1, 2, 1] }),
+        duration: SEADRAGON_TURN_CYCLE_DURATION,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists(DUSKY_MORWONG_SWIM_KEY)) {
+      this.anims.create({
+        key: DUSKY_MORWONG_SWIM_KEY,
+        frames: this.anims.generateFrameNumbers(CREATURES.duskyMorwong.key, { frames: [0, 1, 2, 1] }),
+        frameRate: 3,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists(KING_GEORGE_WHITING_GLIDE_KEY)) {
+      this.anims.create({
+        key: KING_GEORGE_WHITING_GLIDE_KEY,
+        frames: this.anims.generateFrameNumbers(CREATURES.kingGeorgeWhiting.key, {
+          frames: Array.from({ length: KING_GEORGE_WHITING_FRAME_COUNT }, (_, index) => index),
+        }),
+        frameRate: 9,
+        repeat: 0,
+      });
+    }
+
+    if (!this.anims.exists(BULL_RAY_SWIM_KEY)) {
+      this.anims.create({
+        key: BULL_RAY_SWIM_KEY,
+        frames: this.anims.generateFrameNumbers(CREATURES.bullRay.key, {
+          frames: [0, 1, 2, 3, 4, 5, 6, 7],
+        }),
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+  }
+
+  private scheduleGrassWhitingPeek(sprite: Phaser.GameObjects.Sprite) {
+    sprite.setFrame(0);
+    const restX = sprite.x;
+    const restY = sprite.y;
+    const forwardSign = sprite.flipX ? 1 : -1;
+    const forwardX = forwardSign * Math.cos(sprite.rotation);
+    const forwardY = forwardSign * Math.sin(sprite.rotation);
+
+    const playPeek = () => {
+      if (!sprite.active) return;
+      const frameDelay = Phaser.Math.Between(
+        GRASS_WHITING_PEEK_MIN_FRAME_DELAY,
+        GRASS_WHITING_PEEK_MAX_FRAME_DELAY,
+      );
+      const extendedHold = Phaser.Math.Between(
+        GRASS_WHITING_PEEK_MIN_EXTENDED_HOLD,
+        GRASS_WHITING_PEEK_MAX_EXTENDED_HOLD,
+      );
+      const forwardNudge = Phaser.Math.Between(
+        GRASS_WHITING_PEEK_MIN_FORWARD_NUDGE,
+        GRASS_WHITING_PEEK_MAX_FORWARD_NUDGE,
+      );
+      const sequence = [1, 2, GRASS_WHITING_PEEK_EXTENDED_FRAME, 4, 5, 0];
+      let index = 0;
+
+      const advance = () => {
+        if (!sprite.active) return;
+        const frame = sequence[index] ?? 0;
+        sprite.setFrame(frame);
+        const frameProgress = GRASS_WHITING_PEEK_EXTENDED_FRAME > 0
+          ? 1 - Math.min(1, Math.abs(frame - GRASS_WHITING_PEEK_EXTENDED_FRAME) / GRASS_WHITING_PEEK_EXTENDED_FRAME)
+          : 0;
+        const nudge = forwardNudge * Phaser.Math.Easing.Sine.Out(frameProgress);
+        sprite.x = restX + forwardX * nudge;
+        sprite.y = restY + forwardY * nudge;
+        index += 1;
+
+        if (index >= sequence.length) {
+          sprite.x = restX;
+          sprite.y = restY;
+          const delay = Phaser.Math.Between(
+            GRASS_WHITING_PEEK_MIN_TRIGGER_DELAY,
+            GRASS_WHITING_PEEK_MAX_TRIGGER_DELAY,
+          );
+          this.time.delayedCall(delay, playPeek);
+          return;
+        }
+
+        const delay = frame === GRASS_WHITING_PEEK_EXTENDED_FRAME ? extendedHold : frameDelay;
+        this.time.delayedCall(delay, advance);
+      };
+
+      advance();
+    };
+
+    this.time.delayedCall(
+      Phaser.Math.Between(GRASS_WHITING_PEEK_MIN_TRIGGER_DELAY, GRASS_WHITING_PEEK_MAX_TRIGGER_DELAY),
+      playPeek,
+    );
+  }
+
+  private grassWhitingPeekRestYAt(x: number) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
+    const foregroundGrassHeight =
+      SEAGRASS_MEADOW_SOURCE_HEIGHT *
+      0.82 *
+      SEAGRASS_MEADOW_SCALE_FACTOR *
+      depthScale;
+    const localOffset = Phaser.Math.Linear(
+      -5,
+      5,
+      this.deterministicUnit(Math.floor(x / 7), this.caveSeed + 181, 0x51f5),
+    );
+    const lift = Math.max(
+      GRASS_WHITING_PEEK_MIN_FLOOR_LIFT,
+      foregroundGrassHeight - GRASS_WHITING_PEEK_GRASS_HEIGHT_CLEARANCE,
+    );
+
+    return floorY - lift + localOffset;
+  }
+
+  private addGrassWhitingPeckDrift(sprite: Phaser.GameObjects.Sprite) {
+    const anchor = { x: sprite.x, y: sprite.y };
+    const driftToNextPoint = () => {
+      if (!sprite.active) return;
+      const driftX = Phaser.Math.Between(GRASS_WHITING_PECK_MIN_DRIFT, GRASS_WHITING_PECK_MAX_DRIFT);
+      const driftY = Phaser.Math.Between(3, 12);
+      this.tweens.add({
+        targets: sprite,
+        x: anchor.x + (Math.random() > 0.5 ? driftX : -driftX),
+        y: anchor.y + (Math.random() > 0.5 ? driftY : -driftY),
+        duration: Phaser.Math.Between(5200, 9800),
+        ease: "Sine.inOut",
+        onComplete: driftToNextPoint,
+      });
+    };
+
+    this.time.delayedCall(Phaser.Math.Between(0, 3200), driftToNextPoint);
+  }
+
+  private scheduleGrassWhitingPeck(sprite: Phaser.GameObjects.Sprite, directionX: -1 | 1) {
+    sprite.setFrame(0);
+    const baseRotation = sprite.rotation;
+    const downRotation = baseRotation + directionX * Phaser.Math.DegToRad(45);
+
+    const triggerPeck = () => {
+      if (!sprite.active) return;
+      const frameInterval = GRASS_WHITING_PECK_ANIMATION_DURATION / Math.max(1, GRASS_WHITING_PECK_FRAME_COUNT - 1);
+      let frame = 0;
+
+      const setNextFrame = () => {
+        if (!sprite.active) return;
+        sprite.setFrame(Math.min(frame, GRASS_WHITING_PECK_FRAME_COUNT - 1));
+        frame += 1;
+        if (frame < GRASS_WHITING_PECK_FRAME_COUNT) {
+          this.time.delayedCall(frameInterval, setNextFrame);
+        }
+      };
+
+      this.tweens.add({
+        targets: sprite,
+        rotation: downRotation,
+        duration: GRASS_WHITING_PECK_ANIMATION_DURATION * 0.42,
+        ease: "Sine.inOut",
+        yoyo: true,
+        onComplete: () => {
+          sprite.setRotation(baseRotation);
+          sprite.setFrame(0);
+          this.time.delayedCall(
+            Phaser.Math.Between(GRASS_WHITING_PECK_MIN_TRIGGER_DELAY, GRASS_WHITING_PECK_MAX_TRIGGER_DELAY),
+            triggerPeck,
+          );
+        },
+      });
+
+      setNextFrame();
+    };
+
+    this.time.delayedCall(
+      Phaser.Math.Between(GRASS_WHITING_PECK_MIN_TRIGGER_DELAY, GRASS_WHITING_PECK_MAX_TRIGGER_DELAY),
+      triggerPeck,
+    );
+  }
+
+  private grassWhitingPeckRestYAt(x: number) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
+    const foregroundGrassHeight =
+      SEAGRASS_MEADOW_SOURCE_HEIGHT *
+      0.82 *
+      SEAGRASS_MEADOW_SCALE_FACTOR *
+      depthScale;
+    const localOffset = Phaser.Math.Linear(
+      -7,
+      7,
+      this.deterministicUnit(Math.floor(x / 9), this.caveSeed + 227, 0x6c31),
+    );
+
+    return floorY - foregroundGrassHeight - GRASS_WHITING_PECK_GRASS_TOP_GAP + localOffset;
+  }
+
+  private addKingGeorgeWhitingGlide(
+    sprite: Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number; directionX?: -1 | 1 },
+  ) {
+    const corridor = this.kingGeorgeWhitingCorridor();
+    let current = this.kingGeorgeWhitingSafePoint(spawn.x, spawn.y, corridor);
+    let idleTween: Phaser.Tweens.Tween | undefined;
+
+    sprite.setPosition(current.x, current.y);
+    sprite.setFrame(KING_GEORGE_WHITING_REST_FRAME);
+    this.faceSprite(sprite, spawn.assetKey, spawn.directionX ?? 1);
+
+    const startIdleDrift = () => {
+      if (!sprite.active) return;
+      idleTween?.stop();
+      const target = this.kingGeorgeWhitingSafePoint(
+        current.x + Phaser.Math.Between(-KING_GEORGE_WHITING_IDLE_DRIFT_X, KING_GEORGE_WHITING_IDLE_DRIFT_X),
+        current.y + Phaser.Math.Between(-KING_GEORGE_WHITING_IDLE_DRIFT_Y, KING_GEORGE_WHITING_IDLE_DRIFT_Y),
+        corridor,
+      );
+      idleTween = this.tweens.add({
+        targets: sprite,
+        x: target.x,
+        y: target.y,
+        rotation: Phaser.Math.DegToRad(Phaser.Math.FloatBetween(
+          -KING_GEORGE_WHITING_IDLE_MAX_ROTATION_DEGREES,
+          KING_GEORGE_WHITING_IDLE_MAX_ROTATION_DEGREES,
+        )),
+        duration: Phaser.Math.Between(KING_GEORGE_WHITING_IDLE_MIN_DURATION, KING_GEORGE_WHITING_IDLE_MAX_DURATION),
+        ease: "Sine.inOut",
+        onComplete: startIdleDrift,
+      });
+    };
+
+    const restThenGlide = () => {
+      if (!sprite.active) return;
+      sprite.stop();
+      sprite.setFrame(KING_GEORGE_WHITING_REST_FRAME);
+      startIdleDrift();
+
+      this.time.delayedCall(
+        Phaser.Math.Between(KING_GEORGE_WHITING_MIN_REST_DURATION, KING_GEORGE_WHITING_MAX_REST_DURATION),
+        () => {
+          if (!sprite.active) return;
+          idleTween?.stop();
+          idleTween = undefined;
+          current = this.kingGeorgeWhitingSafePoint(sprite.x, sprite.y, corridor);
+          const target = this.kingGeorgeWhitingTarget(current, corridor, spawn.drift);
+          const directionX: -1 | 1 = target.x >= current.x ? 1 : -1;
+          const distance = Phaser.Math.Distance.Between(current.x, current.y, target.x, target.y);
+          const glideSpeed = Phaser.Math.Between(KING_GEORGE_WHITING_MIN_GLIDE_SPEED, KING_GEORGE_WHITING_MAX_GLIDE_SPEED);
+          const progress = { value: 0 };
+          const start = current;
+
+          this.faceSprite(sprite, spawn.assetKey, directionX);
+          sprite.setRotation(0);
+          sprite.play(KING_GEORGE_WHITING_GLIDE_KEY);
+
+          this.tweens.add({
+            targets: progress,
+            value: 1,
+            duration: Phaser.Math.Clamp((distance / glideSpeed) * 1000, 2600, 8200),
+            ease: "Sine.inOut",
+            onUpdate: () => {
+              if (!sprite.anims.isPlaying) sprite.setFrame(KING_GEORGE_WHITING_GLIDE_HOLD_FRAME);
+              const point = this.yellowBlueFishLinearTrackPoint(
+                start,
+                target,
+                progress.value,
+                Phaser.Math.Clamp(distance * 0.018, 2, 7),
+                0.35,
+                0,
+              );
+              const safePoint = this.kingGeorgeWhitingSafePoint(point.x, point.y, corridor);
+              sprite.setPosition(safePoint.x, safePoint.y);
+            },
+            onComplete: () => {
+              current = this.kingGeorgeWhitingSafePoint(target.x, target.y, corridor);
+              sprite.setPosition(current.x, current.y);
+              sprite.setRotation(0);
+              sprite.stop();
+              sprite.setFrame(KING_GEORGE_WHITING_REST_FRAME);
+              restThenGlide();
+            },
+          });
+        },
+      );
+    };
+
+    this.time.delayedCall(Phaser.Math.Between(0, KING_GEORGE_WHITING_MAX_REST_DURATION), restThenGlide);
+  }
+
+  private kingGeorgeWhitingCorridor() {
+    return {
+      minX: BEACH_END_X + 360,
+      maxX: CORAL_END_X - 240,
+    };
+  }
+
+  private kingGeorgeWhitingTarget(
+    current: { x: number; y: number },
+    corridor: { minX: number; maxX: number },
+    drift: number,
+  ) {
+    const direction = Math.random() > 0.5 ? 1 : -1;
+    const distance = Phaser.Math.Clamp(drift * Phaser.Math.FloatBetween(0.55, 1), 44, 150);
+    const x = Phaser.Math.Clamp(current.x + direction * distance, corridor.minX, corridor.maxX);
+    const y = this.kingGeorgeWhitingRestYAt(x) + Phaser.Math.Between(-10, 10);
+
+    return this.kingGeorgeWhitingSafePoint(x, y, corridor);
+  }
+
+  private kingGeorgeWhitingSafePoint(
+    x: number,
+    y: number,
+    corridor: { minX: number; maxX: number },
+  ) {
+    const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
+    const restY = this.kingGeorgeWhitingRestYAt(safeX);
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(safeX, this.terrainTopByColumn)
+      : seafloorYAtX(safeX);
+
+    return {
+      x: safeX,
+      y: Phaser.Math.Clamp(y, restY - 18, Math.min(restY + 18, floorY - 84)),
+    };
+  }
+
+  private kingGeorgeWhitingRestYAt(x: number) {
+    const localOffset = Phaser.Math.Linear(
+      -8,
+      8,
+      this.deterministicUnit(Math.floor(x / 11), this.caveSeed + 313, 0xa711),
+    );
+
+    return this.seagrassCanopyTopYAt(x) - 18 + localOffset;
   }
 
   private addYellowBlueFishSchoolTween(school: {
@@ -2663,6 +3219,486 @@ export class OceanScene extends Phaser.Scene {
 
     updateMembers(1);
     this.time.delayedCall(Math.random() * 900, swimNext);
+  }
+
+  private addSeadragonDrift(
+    sprite: Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number; directionX?: -1 | 1; rotation?: number },
+  ) {
+    const anchor = { x: spawn.x, y: spawn.y };
+    const baseRotationMagnitude = Math.abs(spawn.rotation ?? Phaser.Math.DegToRad(Phaser.Math.Between(30, 60)));
+    let currentDirection: -1 | 1 = spawn.directionX ?? -1;
+    const baseRotation = this.seadragonBaseRotation(currentDirection, baseRotationMagnitude);
+    sprite.setRotation(baseRotation);
+
+    const wobbleDegrees = Phaser.Math.Between(SEADRAGON_ROTATION_WOBBLE_MIN_DEGREES, SEADRAGON_ROTATION_WOBBLE_MAX_DEGREES);
+    this.tweens.add({
+      targets: sprite,
+      rotation: baseRotation + Phaser.Math.DegToRad(wobbleDegrees),
+      duration: Phaser.Math.Between(SEADRAGON_MIN_ROTATION_WOBBLE_DURATION, SEADRAGON_MAX_ROTATION_WOBBLE_DURATION),
+      ease: "Sine.inOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    const driftToNextPoint = () => {
+      if (!sprite.active) return;
+      const nextDirection: -1 | 1 = sprite.x <= anchor.x ? 1 : -1;
+      const driftX = Phaser.Math.Clamp(spawn.drift + Phaser.Math.Between(-24, 36), SEADRAGON_MIN_DRIFT_X, SEADRAGON_MAX_DRIFT_X);
+      const driftY = Phaser.Math.Between(-SEADRAGON_MAX_DRIFT_Y, SEADRAGON_MAX_DRIFT_Y);
+      currentDirection = nextDirection;
+      const targetX = anchor.x + currentDirection * driftX;
+
+      this.tweens.add({
+        targets: sprite,
+        x: targetX,
+        y: this.seadragonSafeYAt(targetX, anchor.y + driftY),
+        duration: Phaser.Math.Between(SEADRAGON_MIN_DRIFT_DURATION, SEADRAGON_MAX_DRIFT_DURATION),
+        ease: "Sine.inOut",
+        onComplete: driftToNextPoint,
+      });
+    };
+
+    this.time.delayedCall(Math.random() * SEADRAGON_MIN_DRIFT_DURATION, driftToNextPoint);
+  }
+
+  private seadragonBaseRotation(directionX: -1 | 1, magnitude: number) {
+    return directionX * magnitude;
+  }
+
+  private addDuskyMorwongRoam(
+    sprite: Phaser.GameObjects.Sprite,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number; directionX?: -1 | 1 },
+  ) {
+    const corridor = this.duskyMorwongCorridor();
+    const settlePoint = this.duskyMorwongSafePoint(spawn.x, spawn.y, corridor);
+    let current = { x: settlePoint.x, y: settlePoint.y };
+    let idleTween: Phaser.Tweens.Tween | undefined;
+
+    sprite.setPosition(current.x, current.y);
+    sprite.setFrame(1);
+
+    const startIdleDrift = () => {
+      if (!sprite.active) return;
+      idleTween?.stop();
+      const target = this.duskyMorwongSafePoint(
+        current.x + Phaser.Math.Between(-DUSKY_MORWONG_IDLE_DRIFT_X, DUSKY_MORWONG_IDLE_DRIFT_X),
+        current.y + Phaser.Math.Between(-DUSKY_MORWONG_IDLE_DRIFT_Y, DUSKY_MORWONG_IDLE_DRIFT_Y),
+        corridor,
+      );
+      idleTween = this.tweens.add({
+        targets: sprite,
+        x: target.x,
+        y: target.y,
+        rotation: Phaser.Math.DegToRad(Phaser.Math.FloatBetween(
+          -DUSKY_MORWONG_IDLE_MAX_ROTATION_DEGREES,
+          DUSKY_MORWONG_IDLE_MAX_ROTATION_DEGREES,
+        )),
+        duration: Phaser.Math.Between(DUSKY_MORWONG_IDLE_MIN_DURATION, DUSKY_MORWONG_IDLE_MAX_DURATION),
+        ease: "Sine.inOut",
+        onComplete: startIdleDrift,
+      });
+    };
+
+    const restThenSwim = () => {
+      if (!sprite.active) return;
+      sprite.stop();
+      sprite.setFrame(1);
+      startIdleDrift();
+
+      this.time.delayedCall(
+        Phaser.Math.Between(DUSKY_MORWONG_MIN_REST_DURATION, DUSKY_MORWONG_MAX_REST_DURATION),
+        () => {
+          if (!sprite.active) return;
+          idleTween?.stop();
+          idleTween = undefined;
+          current = this.duskyMorwongSafePoint(sprite.x, sprite.y, corridor);
+          const target = this.duskyMorwongTarget(current, corridor, spawn.drift);
+          const directionX: -1 | 1 = target.x >= current.x ? 1 : -1;
+          const distance = Phaser.Math.Distance.Between(current.x, current.y, target.x, target.y);
+          const swimSpeed = Phaser.Math.Between(DUSKY_MORWONG_MIN_SPEED, DUSKY_MORWONG_MAX_SPEED);
+          const lateralAmplitude = Phaser.Math.Clamp(distance * 0.018, 8, 28);
+          const phase = Math.random() * Math.PI * 2;
+          const cycles = 0.35 + Math.random() * 0.45;
+          const progress = { value: 0 };
+
+          this.faceSprite(sprite, spawn.assetKey, directionX);
+          sprite.setRotation(0);
+          sprite.play({
+            key: DUSKY_MORWONG_SWIM_KEY,
+            startFrame: Math.floor(Math.random() * 4),
+          });
+
+          this.tweens.add({
+            targets: progress,
+            value: 1,
+            duration: Phaser.Math.Clamp((distance / swimSpeed) * 1000, 18000, 78000),
+            ease: "Sine.inOut",
+            onUpdate: () => {
+              const point = this.yellowBlueFishLinearTrackPoint(
+                current,
+                target,
+                progress.value,
+                lateralAmplitude,
+                cycles,
+                phase,
+              );
+              const safePoint = this.duskyMorwongSafePoint(point.x, point.y, corridor);
+              sprite.setPosition(safePoint.x, safePoint.y);
+            },
+            onComplete: () => {
+              current = this.duskyMorwongSafePoint(target.x, target.y, corridor);
+              sprite.setPosition(current.x, current.y);
+              sprite.setRotation(0);
+              restThenSwim();
+            },
+          });
+        },
+      );
+    };
+
+    restThenSwim();
+  }
+
+  private duskyMorwongCorridor() {
+    return {
+      minX: BEACH_END_X + 520,
+      maxX: CORAL_END_X - 420,
+      minY: WATERLINE_Y + 165,
+      maxY: WATERLINE_Y + 900,
+    };
+  }
+
+  private duskyMorwongTarget(
+    current: { x: number; y: number },
+    corridor: { minX: number; maxX: number; minY: number; maxY: number },
+    drift: number,
+  ) {
+    const direction = current.x < (corridor.minX + corridor.maxX) / 2 ? 1 : -1;
+    const distance = Math.max(DUSKY_MORWONG_MIN_SWIM_DISTANCE, drift * Phaser.Math.FloatBetween(0.65, 1));
+    const x = Phaser.Math.Clamp(current.x + direction * distance, corridor.minX, corridor.maxX);
+    const yRange = this.duskyMorwongYRangeAt(x, corridor);
+    const y = Phaser.Math.Clamp(
+      current.y + Phaser.Math.Between(-90, 90),
+      yRange.minY,
+      yRange.maxY,
+    );
+
+    return { x, y };
+  }
+
+  private duskyMorwongSafePoint(
+    x: number,
+    y: number,
+    corridor: { minX: number; maxX: number; minY: number; maxY: number },
+  ) {
+    const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
+    const yRange = this.duskyMorwongYRangeAt(safeX, corridor);
+
+    return {
+      x: safeX,
+      y: Phaser.Math.Clamp(y, yRange.minY, yRange.maxY),
+    };
+  }
+
+  private duskyMorwongYRangeAt(
+    x: number,
+    corridor: { minY: number; maxY: number },
+  ) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const canopyY = this.seagrassCanopyTopYAt(x);
+    const minY = Math.max(corridor.minY, canopyY + 10);
+    const maxY = Math.min(corridor.maxY, floorY - 86);
+
+    return { minY, maxY: Math.max(minY + 42, maxY) };
+  }
+
+  private addBullRayRoam(
+    sprite: Phaser.GameObjects.Sprite,
+    spawn: {
+      x: number;
+      y: number;
+      assetKey: CreatureKey;
+      drift: number;
+      directionX?: -1 | 1;
+      zoneId?: OceanZone["id"];
+    },
+  ) {
+    const corridor = this.bullRayCorridor(spawn.zoneId === "kelp" ? "kelp" : "coral");
+    let current = this.bullRaySafePoint(spawn.x, spawn.y, corridor, "cruise");
+
+    sprite.setPosition(current.x, current.y);
+    sprite.stop();
+    sprite.setFrame(0);
+    this.faceSprite(sprite, spawn.assetKey, spawn.directionX ?? 1);
+
+    const scheduleNext = () => {
+      if (!sprite.active) return;
+      if (Math.random() < BULL_RAY_REST_CHANCE) {
+        this.bullRayRest(sprite, current, corridor, () => {
+          if (!sprite.active) return;
+          current = this.bullRaySafePoint(sprite.x, sprite.y, corridor, "rest");
+          this.time.delayedCall(Phaser.Math.Between(500, 1800), scheduleNext);
+        });
+        return;
+      }
+
+      const target = this.bullRayTarget(current, corridor, spawn.drift);
+      this.bullRayGlide(sprite, current, target, spawn.assetKey, () => {
+        current = this.bullRaySafePoint(target.x, target.y, corridor, "cruise");
+        this.time.delayedCall(Phaser.Math.Between(900, 2600), scheduleNext);
+      });
+    };
+
+    this.time.delayedCall(Phaser.Math.Between(600, 3600), scheduleNext);
+  }
+
+  private bullRayCorridor(zoneId: "coral" | "kelp") {
+    const zone =
+      zoneId === "kelp"
+        ? { startX: CORAL_END_X, endX: KELP_END_X }
+        : { startX: BEACH_END_X, endX: CORAL_END_X };
+
+    return {
+      zoneId,
+      minX: zone.startX + 260,
+      maxX: zone.endX - 260,
+    };
+  }
+
+  private bullRayTarget(
+    current: { x: number; y: number },
+    corridor: { minX: number; maxX: number; zoneId: "coral" | "kelp" },
+    drift: number,
+  ) {
+    const midpoint = (corridor.minX + corridor.maxX) / 2;
+    const preferredDirection: -1 | 1 = current.x < midpoint ? 1 : -1;
+    const randomDirection: -1 | 1 = Math.random() > 0.38
+      ? preferredDirection
+      : (preferredDirection === 1 ? -1 : 1);
+    const distance = Phaser.Math.Clamp(
+      Math.max(BULL_RAY_MIN_GLIDE_DISTANCE, drift * Phaser.Math.FloatBetween(0.62, 1.05)),
+      BULL_RAY_MIN_GLIDE_DISTANCE,
+      Math.max(BULL_RAY_MIN_GLIDE_DISTANCE, corridor.maxX - corridor.minX - 180),
+    );
+    const x = Phaser.Math.Clamp(current.x + randomDirection * distance, corridor.minX, corridor.maxX);
+    const y = this.bullRayCruiseYAt(x, corridor) + Phaser.Math.Between(-42, 42);
+
+    return this.bullRaySafePoint(x, y, corridor, "cruise");
+  }
+
+  private bullRayGlide(
+    sprite: Phaser.GameObjects.Sprite,
+    start: { x: number; y: number },
+    target: { x: number; y: number },
+    assetKey: CreatureKey,
+    onComplete: () => void,
+  ) {
+    const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+    if (distance < 8) {
+      onComplete();
+      return;
+    }
+
+    const directionX: -1 | 1 = target.x >= start.x ? 1 : -1;
+    const speed = Phaser.Math.Between(BULL_RAY_MIN_CRUISE_SPEED, BULL_RAY_MAX_CRUISE_SPEED);
+    const accelDistance = Phaser.Math.Clamp(distance * 0.12, 60, 180);
+    const decelDistance = Phaser.Math.Clamp(distance * 0.14, 70, 220);
+    const accelT = Phaser.Math.Clamp(accelDistance / distance, 0.04, 0.22);
+    const decelT = Phaser.Math.Clamp(1 - decelDistance / distance, accelT + 0.08, 0.94);
+    const cruiseDistance = Math.max(0, distance * (decelT - accelT));
+    const cruiseDuration = Phaser.Math.Clamp((cruiseDistance / speed) * 1000, 18000, 150000);
+
+    const placeAt = (t: number) => {
+      sprite.setPosition(
+        Phaser.Math.Linear(start.x, target.x, t),
+        Phaser.Math.Linear(start.y, target.y, t),
+      );
+    };
+
+    const playImpulseAnimation = () => {
+      if (!sprite.anims.isPlaying) {
+        sprite.play({
+          key: BULL_RAY_SWIM_KEY,
+          startFrame: Math.floor(Math.random() * 8),
+        });
+      }
+    };
+
+    const pauseAnimation = () => {
+      sprite.stop();
+    };
+
+    const progress = { t: 0 };
+    this.faceSprite(sprite, assetKey, directionX);
+    playImpulseAnimation();
+    this.tweens.add({
+      targets: progress,
+      t: accelT,
+      duration: BULL_RAY_ACCEL_DURATION,
+      ease: "Quad.in",
+      onUpdate: () => placeAt(progress.t),
+      onComplete: () => {
+        pauseAnimation();
+        this.tweens.add({
+          targets: progress,
+          t: decelT,
+          duration: cruiseDuration,
+          ease: "Linear",
+          onUpdate: () => placeAt(progress.t),
+          onComplete: () => {
+            playImpulseAnimation();
+            this.tweens.add({
+              targets: progress,
+              t: 1,
+              duration: BULL_RAY_DECEL_DURATION,
+              ease: "Quad.out",
+              onUpdate: () => placeAt(progress.t),
+              onComplete: () => {
+                placeAt(1);
+                pauseAnimation();
+                onComplete();
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  private bullRayRest(
+    sprite: Phaser.GameObjects.Sprite,
+    current: { x: number; y: number },
+    corridor: { minX: number; maxX: number; zoneId: "coral" | "kelp" },
+    onComplete: () => void,
+  ) {
+    const restPoint = this.bullRaySafePoint(
+      current.x + Phaser.Math.Between(-260, 260),
+      this.bullRayRestYAt(current.x),
+      corridor,
+      "rest",
+    );
+    const resumePoint = this.bullRaySafePoint(
+      restPoint.x + Phaser.Math.Between(-420, 420),
+      this.bullRayCruiseYAt(restPoint.x, corridor),
+      corridor,
+      "cruise",
+    );
+    const descendDistance = Phaser.Math.Distance.Between(current.x, current.y, restPoint.x, restPoint.y);
+    const ascendDistance = Phaser.Math.Distance.Between(restPoint.x, restPoint.y, resumePoint.x, resumePoint.y);
+
+    sprite.play({
+      key: BULL_RAY_SWIM_KEY,
+      startFrame: Math.floor(Math.random() * 8),
+    });
+    this.tweens.add({
+      targets: sprite,
+      x: restPoint.x,
+      y: restPoint.y,
+      duration: Phaser.Math.Clamp((descendDistance / 18) * 1000, 4200, 16000),
+      ease: "Sine.out",
+      onComplete: () => {
+        sprite.stop();
+        sprite.setFrame(0);
+        this.time.delayedCall(
+          Phaser.Math.Between(BULL_RAY_MIN_REST_DURATION, BULL_RAY_MAX_REST_DURATION),
+          () => {
+            if (!sprite.active) return;
+            const directionX: -1 | 1 = resumePoint.x >= restPoint.x ? 1 : -1;
+            this.faceSprite(sprite, "bull-ray", directionX);
+            sprite.play({
+              key: BULL_RAY_SWIM_KEY,
+              startFrame: Math.floor(Math.random() * 8),
+            });
+            this.tweens.add({
+              targets: sprite,
+              x: resumePoint.x,
+              y: resumePoint.y,
+              duration: Phaser.Math.Clamp((ascendDistance / 16) * 1000, 5200, 18000),
+              ease: "Sine.inOut",
+              onComplete: () => {
+                sprite.stop();
+                onComplete();
+              },
+            });
+          },
+        );
+      },
+    });
+  }
+
+  private bullRaySafePoint(
+    x: number,
+    y: number,
+    corridor: { minX: number; maxX: number; zoneId: "coral" | "kelp" },
+    mode: "cruise" | "rest",
+  ) {
+    const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
+    if (mode === "rest") {
+      return { x: safeX, y: this.bullRayRestYAt(safeX) };
+    }
+
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(safeX, this.terrainTopByColumn)
+      : seafloorYAtX(safeX);
+    const cruiseY = this.bullRayCruiseYAt(safeX, corridor);
+    const minY = WATERLINE_Y + 145;
+    const maxY = Math.max(minY + 40, floorY - 138);
+
+    return {
+      x: safeX,
+      y: Phaser.Math.Clamp(y, Math.min(minY, cruiseY - 70), maxY),
+    };
+  }
+
+  private bullRayCruiseYAt(
+    x: number,
+    corridor: { zoneId: "coral" | "kelp" },
+  ) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    if (corridor.zoneId === "coral") {
+      return Phaser.Math.Clamp(this.seagrassCanopyTopYAt(x) - 118, WATERLINE_Y + 150, floorY - 170);
+    }
+
+    return Phaser.Math.Clamp(floorY - 270, WATERLINE_Y + 165, floorY - 150);
+  }
+
+  private bullRayRestYAt(x: number) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+
+    return floorY - 34;
+  }
+
+  private seagrassCanopyTopYAt(x: number) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
+
+    return floorY - SEAGRASS_MEADOW_SOURCE_HEIGHT * 0.82 * SEAGRASS_MEADOW_SCALE_FACTOR * depthScale;
+  }
+
+  private seadragonSafeYAt(x: number, y: number) {
+    const floorY = this.terrainTopByColumn.size > 0
+      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
+      : seafloorYAtX(x);
+    const canopyY = this.seagrassCanopyTopYAt(x);
+    const minY = Math.max(WATERLINE_Y + 118, canopyY + 36);
+    const maxY = Math.max(minY, floorY - 92);
+
+    return Phaser.Math.Clamp(y, minY, maxY);
+  }
+
+  private faceSeadragon(sprite: Phaser.GameObjects.Components.Flip, directionX: -1 | 1) {
+    sprite.setFlipX(directionX > 0);
+    sprite.setFlipY(false);
   }
 
   private yellowBlueFishSafeCorridor(schoolMarginX: number, schoolMarginY: number) {
@@ -2806,6 +3842,12 @@ export class OceanScene extends Phaser.Scene {
     relativeScale: number,
   ) {
     if (assetKey === "yellow-blue-fish") return (YELLOW_BLUE_FISH_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "seadragon") return (SEADRAGON_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "grass-whiting-peek") return (GRASS_WHITING_PEEK_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "grass-whiting-peck") return (GRASS_WHITING_PECK_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "king-george-whiting") return (KING_GEORGE_WHITING_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "dusky-morwong") return (DUSKY_MORWONG_BASE_WIDTH / sprite.width) * relativeScale;
+    if (assetKey === "bull-ray") return (BULL_RAY_BASE_WIDTH / sprite.width) * relativeScale;
     return relativeScale;
   }
 
@@ -2877,6 +3919,8 @@ export class OceanScene extends Phaser.Scene {
 
   private creatureOriginY(assetKey: CreatureKey) {
     if (assetKey === "crayfish" || assetKey === "nudhhi" || assetKey === "smooth-sting-ray") return 1;
+    if (assetKey === "grass-whiting-peek") return GRASS_WHITING_PEEK_ORIGIN_Y;
+    if (assetKey === "grass-whiting-peck") return GRASS_WHITING_PECK_ORIGIN_Y;
     if (assetKey === "blue-devil") return 0.72;
     return 0.5;
   }
@@ -2901,7 +3945,7 @@ export class OceanScene extends Phaser.Scene {
     assetKey: CreatureKey | "port-jackson",
     directionX: -1 | 1,
   ) {
-    const nativeFacesLeft = assetKey !== "blue-devil";
+    const nativeFacesLeft = assetKey !== "blue-devil" && assetKey !== "bull-ray" && assetKey !== "dusky-morwong";
     sprite.setFlipX(nativeFacesLeft ? directionX > 0 : directionX < 0);
   }
 
@@ -3822,7 +4866,8 @@ export class OceanScene extends Phaser.Scene {
         FINAL_BIOME_BACKGROUND_RESPONSE,
       );
       const inCave = this.hero ? this.isHeroInCave() : false;
-      layer.image.setAlpha(inCave ? 0 : FINAL_BIOME_BACKGROUND_ALPHA).setVisible(!inCave);
+      const alpha = inCave ? 0 : this.finalBiomeBackgroundAlphaAt(camera.scrollX + camera.width / 2);
+      layer.image.setAlpha(alpha).setVisible(alpha > 0);
       layer.mask
         .clear()
         .fillStyle(0xffffff, 1)
@@ -3849,6 +4894,14 @@ export class OceanScene extends Phaser.Scene {
 
     const local = Phaser.Math.Clamp((worldX - KELP_END_X) / Math.max(1, WORLD_WIDTH - KELP_END_X), 0, 1);
     return Phaser.Math.Linear(FINAL_BIOME_KELP_IMAGE_END, 1, local);
+  }
+
+  private finalBiomeBackgroundAlphaAt(worldX: number) {
+    const fade = this.smooth01(
+      (worldX - FINAL_BIOME_BACKGROUND_FADE_START_X) /
+        Math.max(1, FINAL_BIOME_BACKGROUND_FADE_END_X - FINAL_BIOME_BACKGROUND_FADE_START_X),
+    );
+    return FINAL_BIOME_BACKGROUND_ALPHA * fade;
   }
 
   private updateLighting() {
