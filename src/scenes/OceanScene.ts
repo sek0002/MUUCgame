@@ -368,7 +368,7 @@ const SEAGRASS_STEEP_SLOPE_MIN_SPACING_FACTOR = 0.22;
 const SEAGRASS_MEADOW_TRANSITION_MIN_DELAY = 2000;
 const SEAGRASS_MEADOW_TRANSITION_MAX_DELAY = 5000;
 const KELP_FOREST_FRAME_COUNT = 8;
-const KELP_FOREST_FRAME_RATE = 5.55;
+const KELP_FOREST_FRAME_RATE = 3.2;
 const KELP_FOREST_START_MARGIN = 180;
 const KELP_FOREST_END_MARGIN = 420;
 const KELP_FOREST_ROW_COUNT = 4;
@@ -400,8 +400,6 @@ const SAND_PALETTE_DARK = 0x3a2316;
 const TERRAIN_GRADIENT_TEXTURE_KEY = "terrain-sand-gradient-scale";
 const TERRAIN_GRADIENT_TEXTURE_WIDTH = 1200;
 const TERRAIN_GRADIENT_TEXTURE_HEIGHT = 720;
-const MIN_LOADING_SCREEN_MS = 1400;
-const READY_LOADING_HOLD_MS = 700;
 type SeagrassFrameSet = (typeof SEAGRASS_MEADOW_VARIANTS)[number]["frames"];
 export class OceanScene extends Phaser.Scene {
   private hero!: Phaser.Physics.Arcade.Sprite;
@@ -462,6 +460,20 @@ export class OceanScene extends Phaser.Scene {
   private wasSurfaceBobbing = false;
   private surfaceJumpHoldConsumed = false;
   private lastJumpPressed = false;
+  private splashOverlayActive = true;
+  private loadingReady = false;
+  private autoStartAfterLoad = false;
+  private heroSpawned = false;
+  private splashRoot?: HTMLElement;
+  private splashPanel?: HTMLElement;
+  private startButton?: HTMLButtonElement;
+  private splashCameraDrift?: {
+    baseCenterX: number;
+    minCenterX: number;
+    maxCenterX: number;
+    fixedScrollY: number;
+    range: number;
+  };
   private devCameraTools?: DevCameraTools;
   private devCameraEnabled = false;
   private devCameraDragging = false;
@@ -469,7 +481,6 @@ export class OceanScene extends Phaser.Scene {
   private backgroundImageVisibilityTween?: Phaser.Tweens.Tween;
   private caveSeed = DEFAULT_CAVE_SEED;
   private caveTiles = new Set<string>();
-  private loadingScreenStartedAt = 0;
   private performanceProfile: PerformanceProfile = this.defaultPerformanceProfile();
   private heroCameraSize?: { width: number; height: number; profile: PerformanceProfile };
   private devCameraDragStart?: {
@@ -498,7 +509,6 @@ export class OceanScene extends Phaser.Scene {
   }
 
   preload() {
-    this.loadingScreenStartedAt = performance.now();
     this.updateLoadingScreen(0);
     this.load.on("progress", (value: number) => this.updateLoadingScreen(value));
     this.load.once("complete", () => this.updateLoadingScreen(1));
@@ -579,6 +589,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   create() {
+    this.autoStartAfterLoad = new URLSearchParams(window.location.search).has("noStartupSlide");
     const world = generateWorld(this.caveSeed);
     this.caveTiles = world.caveTiles;
     this.zoneLabel = document.getElementById("zone-label");
@@ -621,19 +632,25 @@ export class OceanScene extends Phaser.Scene {
     this.createLightingOverlay();
 
     this.physics.add.collider(this.hero, this.rocks);
-    this.cameras.main.centerOn(this.hero.x, this.hero.y);
-    this.applyHeroCameraFollowSettings(true);
-    this.hideLoadingScreen();
+    this.splashOverlayActive = true;
+    this.prepareSplashScreen(world.zones, world.creatures);
   }
 
   private updateLoadingScreen(progress: number) {
     const splash = document.getElementById("splash");
+    const splashPanel = document.getElementById("loading-panel");
+    const startButton = document.getElementById("start-button");
     const fill = document.getElementById("loading-fill");
     const percent = document.getElementById("loading-percent");
     const status = document.getElementById("loading-status");
     const normalizedProgress = Phaser.Math.Clamp(progress, 0, 1);
 
     splash?.classList.remove("is-ready");
+    const isReady = normalizedProgress >= 1;
+    if (startButton instanceof HTMLButtonElement) {
+      startButton.disabled = !isReady;
+      this.startButton = startButton;
+    }
     if (fill instanceof HTMLElement) {
       fill.style.width = `${Math.round(normalizedProgress * 100)}%`;
     }
@@ -641,31 +658,175 @@ export class OceanScene extends Phaser.Scene {
       percent.textContent = `${Math.round(normalizedProgress * 100)}%`;
     }
     if (status) {
-      status.textContent = normalizedProgress >= 1 ? "Preparing reef" : "Loading assets";
+      status.textContent = normalizedProgress >= 1 ? "Press Start to dive" : "Loading assets";
+    }
+
+    if (normalizedProgress >= 1) {
+      this.loadingReady = true;
+      splashPanel?.classList.add("loading-ready");
+      if (this.startButton instanceof HTMLButtonElement) {
+        this.startButton.disabled = false;
+      }
+      if (splashPanel) {
+        splashPanel.classList.add("loading-ready");
+      }
+      if (this.autoStartAfterLoad) {
+        requestAnimationFrame(() => this.startGame());
+      }
     }
   }
 
-  private hideLoadingScreen() {
+  private prepareSplashScreen(
+    zones: OceanZone[],
+    creatures: Array<{
+      x: number;
+      y: number;
+      assetKey: CreatureKey;
+      zoneId: OceanZone["id"];
+    }>,
+  ) {
     this.updateLoadingScreen(1);
-    const elapsed = performance.now() - this.loadingScreenStartedAt;
-    const remainingDelay = Math.max(READY_LOADING_HOLD_MS, MIN_LOADING_SCREEN_MS - elapsed);
+    this.splashRoot = document.getElementById("splash") ?? undefined;
+    this.splashPanel = document.getElementById("loading-panel") ?? undefined;
+    this.startButton = document.getElementById("start-button") instanceof HTMLButtonElement
+      ? (document.getElementById("start-button") as HTMLButtonElement)
+      : undefined;
 
-    window.setTimeout(() => {
-      document.getElementById("splash")?.classList.add("is-ready");
-    }, remainingDelay);
+    if (this.splashPanel instanceof HTMLElement) {
+      this.splashPanel.classList.add("loading-ready");
+    }
+    if (this.startButton instanceof HTMLButtonElement) {
+      this.startButton.disabled = !this.loadingReady;
+      if (this.startButton.dataset.bound !== "true") {
+        this.startButton.dataset.bound = "true";
+        this.startButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          this.startGame();
+        });
+        this.startButton.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.startGame();
+        });
+      }
+    }
+
+    this.enterSplashCameraMode(zones, creatures);
+    const splashRoot = this.splashRoot;
+    const app = document.getElementById("app");
+    if (app instanceof HTMLElement) {
+      app.classList.add("splash-mode");
+    }
+    splashRoot?.classList.remove("is-ready");
+    splashRoot?.setAttribute("aria-hidden", "false");
+    this.clearTouchInput();
+    this.startButton?.focus();
+  }
+
+  private enterSplashCameraMode(
+    zones: OceanZone[],
+    creatures: Array<{
+      x: number;
+      y: number;
+      assetKey: CreatureKey;
+      zoneId: OceanZone["id"];
+    }>,
+  ) {
+    const kelpZone = zones.find((zone) => zone.id === "kelp");
+    const raySpawn = creatures.find((creature) => creature.assetKey === "bull-ray" && creature.zoneId === "kelp")
+      ?? creatures.find((creature) => creature.assetKey === "bull-ray");
+    const targetX = Phaser.Math.Clamp(
+      raySpawn?.x ?? (kelpZone ? (kelpZone.startX + kelpZone.endX) * 0.5 : BEACH_END_X + 760),
+      0,
+      WORLD_WIDTH,
+    );
+    const targetY = Phaser.Math.Clamp(raySpawn?.y ?? this.worldLineYAt(targetX), 0, WORLD_HEIGHT);
+    const camera = this.cameras.main;
+    const targetScrollX = Phaser.Math.Clamp(targetX - camera.width / 2, 0, WORLD_WIDTH - camera.width);
+    const targetScrollY = Phaser.Math.Clamp(targetY - camera.height / 2, 0, WORLD_HEIGHT - camera.height);
+    const kelpStartX = kelpZone?.startX ?? Phaser.Math.Clamp(targetX - 1200, 0, WORLD_WIDTH);
+    const kelpEndX = kelpZone?.endX ?? Phaser.Math.Clamp(targetX + 1200, 0, WORLD_WIDTH);
+    const minCenterX = Math.min(
+      kelpEndX - camera.width / 2,
+      Math.max(kelpStartX + camera.width / 2, targetX - 900),
+    );
+    const maxCenterX = Math.max(
+      kelpStartX + camera.width / 2,
+      Math.min(kelpEndX - camera.width / 2, targetX + 900),
+    );
+    const range = Math.max(0, Math.min(700, (maxCenterX - minCenterX) * 0.5));
+
+    camera.stopFollow();
+    camera.setDeadzone(0, 0);
+    camera.setZoom(1);
+    camera.scrollX = targetScrollX;
+    camera.scrollY = targetScrollY;
+    this.splashCameraDrift = {
+      baseCenterX: Phaser.Math.Clamp(targetX, minCenterX, maxCenterX),
+      minCenterX,
+      maxCenterX,
+      fixedScrollY: targetScrollY,
+      range,
+    };
+  }
+
+  private updateSplashCameraDrift(time: number) {
+    if (!this.splashOverlayActive || !this.splashCameraDrift || this.devCameraEnabled) return;
+
+    const camera = this.cameras.main;
+    const drift = this.splashCameraDrift;
+    const lazyOffset =
+      Math.sin(time * 0.000025) * drift.range +
+      Math.sin(time * 0.00001 + 1.8) * drift.range * 0.22;
+    const centerX = Phaser.Math.Clamp(drift.baseCenterX + lazyOffset, drift.minCenterX, drift.maxCenterX);
+    camera.scrollX = Phaser.Math.Clamp(centerX - camera.width / 2, 0, WORLD_WIDTH - camera.width);
+    camera.scrollY = drift.fixedScrollY;
+  }
+
+  private startGame() {
+    if (!this.loadingReady || !this.splashOverlayActive) return;
+    this.splashOverlayActive = false;
+    this.spawnHero();
+
+    const splash = this.splashRoot ?? document.getElementById("splash");
+    splash?.classList.add("is-ready");
+
+    const app = document.getElementById("app");
+    if (app instanceof HTMLElement) {
+      app.classList.remove("splash-mode");
+    }
+
+    this.setGamePlayingCamera();
+    this.updateDeveloperToolState();
+    this.clearTouchInput();
+  }
+
+  private setGamePlayingCamera() {
+    const camera = this.cameras.main;
+    camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    camera.useBounds = true;
+    camera.centerOn(this.hero.x, this.hero.y);
+    this.applyHeroCameraFollowSettings(true);
   }
 
   update(time: number, delta: number) {
     this.updateDeveloperCamera(delta);
-    this.handleInput(delta);
-    this.updateSurfacePhysics(time);
-    this.clampHeroSwimVelocity();
-    this.updateHeroPresentation();
-    this.keepHeroInCameraView();
+    this.updateSplashCameraDrift(time);
+    if (!this.splashOverlayActive) {
+      this.handleInput(delta);
+      this.updateSurfacePhysics(time);
+      this.clampHeroSwimVelocity();
+      this.updateHeroPresentation();
+      this.keepHeroInCameraView();
+    }
     this.updateBubbles(time, delta);
     this.updateKelpForest();
     this.updateParallax(delta);
     this.updateTerrainLabelScale();
+    if (this.splashOverlayActive) {
+      this.lightingOverlay?.clear();
+      return;
+    }
     this.updateHeroVisibilityStatus();
     this.updateCaveVisibility();
     this.updateHud();
@@ -890,7 +1051,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private keepHeroInCameraView() {
-    if (!this.hero || this.devCameraEnabled) return;
+    if (!this.hero || this.devCameraEnabled || this.splashOverlayActive) return;
     this.applyHeroCameraFollowSettings();
 
     const camera = this.cameras.main;
@@ -2890,6 +3051,10 @@ export class OceanScene extends Phaser.Scene {
     return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn);
   }
 
+  private worldLineYAt(x: number) {
+    return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn);
+  }
+
   private kelpTintAt(x: number, y: number, row: number) {
     const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
     const rowT = row / Math.max(1, KELP_FOREST_ROW_COUNT - 1);
@@ -4683,7 +4848,7 @@ export class OceanScene extends Phaser.Scene {
 
   private createHero() {
     const spawnX = BEACH_END_X + 420;
-    const spawnY = Math.max(WATERLINE_Y + 74, this.beachShelfYAt(spawnX) - 150);
+    const spawnY = WATERLINE_Y + 92;
     this.hero = this.physics.add
       .sprite(spawnX, spawnY, CREATURES.hero.frames.center.key)
       .setScale(HERO_RENDER_WIDTH / this.textures.get(CREATURES.hero.frames.center.key).getSourceImage().width)
@@ -4694,7 +4859,35 @@ export class OceanScene extends Phaser.Scene {
       .setCollideWorldBounds(true);
 
     this.hero.body?.setSize(92, 36, true);
+    this.hideHeroUntilStart();
     this.faceSprite(this.hero, "port-jackson", this.heroDirectionX);
+  }
+
+  private hideHeroUntilStart() {
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    body.enable = false;
+    body.setVelocity(0, 0);
+    body.setAcceleration(0, 0);
+    this.hero.setVisible(false);
+    this.hero.setActive(false);
+    this.heroSpawned = false;
+  }
+
+  private spawnHero() {
+    if (this.heroSpawned) return;
+
+    const body = this.hero.body as Phaser.Physics.Arcade.Body;
+    body.enable = true;
+    body.setVelocity(0, 0);
+    body.setAcceleration(0, 0);
+    body.setGravityY(0);
+    this.hero
+      .setVisible(true)
+      .setActive(true)
+      .setDepth(HERO_VISIBLE_DEPTH)
+      .setRotation(0)
+      .setTexture(CREATURES.hero.frames.center.key);
+    this.heroSpawned = true;
   }
 
   private createControls() {
@@ -5281,8 +5474,10 @@ export class OceanScene extends Phaser.Scene {
     const body = this.hero.body as Phaser.Physics.Arcade.Body;
     if (this.devCameraEnabled) {
       body.setAcceleration(0);
+      body.setVelocity(0, 0);
       this.lastJumpPressed = false;
       this.surfaceJumpHoldConsumed = false;
+      this.isSurfaceJumping = false;
       this.clearTouchInput();
       return;
     }
