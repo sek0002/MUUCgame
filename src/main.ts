@@ -25,6 +25,8 @@ const fullscreenElement = () =>
 
 const DEFAULT_DESKTOP_RENDER_HEIGHT = 720;
 const DEFAULT_MOBILE_RENDER_HEIGHT = 480;
+const MOBILE_TARGET_RENDER_WIDTH = 854;
+const MOBILE_TARGET_RENDER_AREA = DEFAULT_MOBILE_RENDER_HEIGHT * MOBILE_TARGET_RENDER_WIDTH;
 const MIN_RENDER_HEIGHT = 360;
 const MAX_RENDER_HEIGHT = 1080;
 const MIN_DESKTOP_RENDER_WIDTH = 360;
@@ -35,6 +37,19 @@ const maxRenderHeight = () => (isMobileRenderTarget() ? DEFAULT_MOBILE_RENDER_HE
 const minRenderWidth = () => (isMobileRenderTarget() ? MIN_MOBILE_RENDER_WIDTH : MIN_DESKTOP_RENDER_WIDTH);
 const clampRenderHeight = (height: number) =>
   Phaser.Math.Clamp(Math.round(height), MIN_RENDER_HEIGHT, maxRenderHeight());
+const viewportAspect = () => {
+  const root = document.getElementById("game-root");
+  const rect = root?.getBoundingClientRect();
+  if (rect && rect.width > 0 && rect.height > 0) {
+    return rect.width / rect.height;
+  }
+
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
+
+  return width / Math.max(1, height);
+};
 
 const defaultRenderHeight = () => (
   isMobileRenderTarget() ? DEFAULT_MOBILE_RENDER_HEIGHT : DEFAULT_DESKTOP_RENDER_HEIGHT
@@ -43,8 +58,20 @@ const defaultRenderHeight = () => (
 let renderHeight = clampRenderHeight(defaultRenderHeight());
 
 const getRenderSize = () => {
+  const aspect = viewportAspect();
+
+  if (isMobileRenderTarget()) {
+    const mobileHeight = Math.max(1, Math.round(Math.sqrt(MOBILE_TARGET_RENDER_AREA / aspect)));
+    const mobileWidth = Math.max(minRenderWidth(), Math.round(mobileHeight * aspect));
+    renderHeight = mobileHeight;
+
+    return {
+      width: mobileWidth,
+      height: mobileHeight,
+    };
+  }
+
   renderHeight = clampRenderHeight(renderHeight);
-  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
 
   return {
     width: Math.max(minRenderWidth(), Math.round(renderHeight * aspect)),
