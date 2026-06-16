@@ -400,6 +400,7 @@ const SAND_PALETTE_DARK = 0x3a2316;
 const TERRAIN_GRADIENT_TEXTURE_KEY = "terrain-sand-gradient-scale";
 const TERRAIN_GRADIENT_TEXTURE_WIDTH = 1200;
 const TERRAIN_GRADIENT_TEXTURE_HEIGHT = 720;
+const CAMERA_TELEPORT_SYNC_THRESHOLD = 220;
 type SeagrassFrameSet = (typeof SEAGRASS_MEADOW_VARIANTS)[number]["frames"];
 export class OceanScene extends Phaser.Scene {
   private hero!: Phaser.Physics.Arcade.Sprite;
@@ -479,6 +480,7 @@ export class OceanScene extends Phaser.Scene {
   private devCameraDragging = false;
   private backgroundImageVisibility = 1;
   private backgroundImageVisibilityTween?: Phaser.Tweens.Tween;
+  private parallaxCameraLastScroll?: { x: number; y: number };
   private caveSeed = DEFAULT_CAVE_SEED;
   private caveTiles = new Set<string>();
   private performanceProfile: PerformanceProfile = this.defaultPerformanceProfile();
@@ -590,6 +592,7 @@ export class OceanScene extends Phaser.Scene {
 
   create() {
     this.autoStartAfterLoad = new URLSearchParams(window.location.search).has("noStartupSlide");
+    document.getElementById("app")?.classList.remove("splash-scene-ready");
     const world = generateWorld(this.caveSeed);
     this.caveTiles = world.caveTiles;
     this.zoneLabel = document.getElementById("zone-label");
@@ -715,7 +718,7 @@ export class OceanScene extends Phaser.Scene {
     const splashRoot = this.splashRoot;
     const app = document.getElementById("app");
     if (app instanceof HTMLElement) {
-      app.classList.add("splash-mode");
+      app.classList.add("splash-mode", "splash-scene-ready");
     }
     splashRoot?.classList.remove("is-ready");
     splashRoot?.setAttribute("aria-hidden", "false");
@@ -793,7 +796,7 @@ export class OceanScene extends Phaser.Scene {
 
     const app = document.getElementById("app");
     if (app instanceof HTMLElement) {
-      app.classList.remove("splash-mode");
+      app.classList.remove("splash-mode", "splash-scene-ready");
     }
 
     this.setGamePlayingCamera();
@@ -5646,9 +5649,10 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private updateParallax(delta: number) {
-    this.updateDistalWaterColumn();
-    this.updateCoralGardenBackdrop();
-    this.updateFinalBiomeBackgrounds();
+    const snapToCamera = this.consumeCameraTeleportSync();
+    this.updateDistalWaterColumn(snapToCamera);
+    this.updateCoralGardenBackdrop(snapToCamera);
+    this.updateFinalBiomeBackgrounds(snapToCamera);
     const seconds = delta / 1000;
     for (const cloud of this.skyClouds) {
       cloud.container.x += cloud.speed * seconds;
@@ -5658,7 +5662,16 @@ export class OceanScene extends Phaser.Scene {
     }
   }
 
-  private updateDistalWaterColumn() {
+  private consumeCameraTeleportSync() {
+    const camera = this.cameras.main;
+    const previous = this.parallaxCameraLastScroll;
+    this.parallaxCameraLastScroll = { x: camera.scrollX, y: camera.scrollY };
+    if (!previous) return true;
+
+    return Math.hypot(camera.scrollX - previous.x, camera.scrollY - previous.y) > CAMERA_TELEPORT_SYNC_THRESHOLD;
+  }
+
+  private updateDistalWaterColumn(snapToCamera = false) {
     if (!this.distalWaterColumn) return;
 
     const camera = this.cameras.main;
@@ -5670,7 +5683,9 @@ export class OceanScene extends Phaser.Scene {
     const scale = Math.max(viewWidth / texture.width, viewHeight / texture.height) * DISTAL_WATER_COLUMN_SCALE;
     const displayWidth = texture.width * scale;
     const displayHeight = texture.height * scale;
-    const previousScroll = this.distalWaterLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
+    const previousScroll = snapToCamera
+      ? { x: camera.scrollX, y: camera.scrollY }
+      : this.distalWaterLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
     const deltaX = camera.scrollX - previousScroll.x;
     const deltaY = camera.scrollY - previousScroll.y;
     this.distalWaterLastScroll = { x: camera.scrollX, y: camera.scrollY };
@@ -5679,29 +5694,30 @@ export class OceanScene extends Phaser.Scene {
     const minOffsetY = Math.min(0, camera.height - surfaceLinkedTop - displayHeight + DISTAL_WATER_COLUMN_EDGE_PADDING);
     const maxOffsetY = Math.max(0, waterlineInViewY - surfaceLinkedTop - DISTAL_WATER_COLUMN_EDGE_PADDING);
 
-    this.distalWaterScrollOffset.x = Phaser.Math.Clamp(
-      this.distalWaterScrollOffset.x - deltaX * DISTAL_WATER_COLUMN_SCROLL_DRIFT_X,
-      -maxOffsetX,
-      maxOffsetX,
-    );
-    this.distalWaterScrollOffset.y = Phaser.Math.Clamp(
-      this.distalWaterScrollOffset.y - deltaY * DISTAL_WATER_COLUMN_SCROLL_DRIFT_Y,
-      minOffsetY,
-      maxOffsetY,
-    );
+    if (snapToCamera) {
+      this.distalWaterScrollOffset.x = 0;
+      this.distalWaterScrollOffset.y = 0;
+    } else {
+      this.distalWaterScrollOffset.x = Phaser.Math.Clamp(
+        this.distalWaterScrollOffset.x - deltaX * DISTAL_WATER_COLUMN_SCROLL_DRIFT_X,
+        -maxOffsetX,
+        maxOffsetX,
+      );
+      this.distalWaterScrollOffset.y = Phaser.Math.Clamp(
+        this.distalWaterScrollOffset.y - deltaY * DISTAL_WATER_COLUMN_SCROLL_DRIFT_Y,
+        minOffsetY,
+        maxOffsetY,
+      );
+    }
 
     const targetOffsetX = Phaser.Math.Clamp(this.distalWaterScrollOffset.x, -maxOffsetX, maxOffsetX);
     const targetOffsetY = Phaser.Math.Clamp(this.distalWaterScrollOffset.y, minOffsetY, maxOffsetY);
-    this.distalWaterOffset.x = Phaser.Math.Linear(
-      this.distalWaterOffset.x,
-      targetOffsetX,
-      DISTAL_WATER_COLUMN_RESPONSE,
-    );
-    this.distalWaterOffset.y = Phaser.Math.Linear(
-      this.distalWaterOffset.y,
-      targetOffsetY,
-      DISTAL_WATER_COLUMN_RESPONSE,
-    );
+    this.distalWaterOffset.x = snapToCamera
+      ? targetOffsetX
+      : Phaser.Math.Linear(this.distalWaterOffset.x, targetOffsetX, DISTAL_WATER_COLUMN_RESPONSE);
+    this.distalWaterOffset.y = snapToCamera
+      ? targetOffsetY
+      : Phaser.Math.Linear(this.distalWaterOffset.y, targetOffsetY, DISTAL_WATER_COLUMN_RESPONSE);
 
     this.distalWaterColumnMask
       ?.clear()
@@ -5716,7 +5732,7 @@ export class OceanScene extends Phaser.Scene {
       .setDisplaySize(displayWidth, displayHeight);
   }
 
-  private updateCoralGardenBackdrop() {
+  private updateCoralGardenBackdrop(snapToCamera = false) {
     if (!this.coralGardenBackdrop) return;
 
     const camera = this.cameras.main;
@@ -5728,7 +5744,9 @@ export class OceanScene extends Phaser.Scene {
     const scale = Math.max(viewWidth / texture.width, viewHeight / texture.height) * CORAL_GARDEN_BACKDROP_SCALE;
     const displayWidth = texture.width * scale;
     const displayHeight = texture.height * scale;
-    const previousScroll = this.coralGardenBackdropLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
+    const previousScroll = snapToCamera
+      ? { x: camera.scrollX, y: camera.scrollY }
+      : this.coralGardenBackdropLastScroll ?? { x: camera.scrollX, y: camera.scrollY };
     const deltaY = camera.scrollY - previousScroll.y;
     this.coralGardenBackdropLastScroll = { x: camera.scrollX, y: camera.scrollY };
     const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - CORAL_GARDEN_BACKDROP_EDGE_PADDING);
@@ -5738,22 +5756,21 @@ export class OceanScene extends Phaser.Scene {
     const minOffsetY = Math.min(0, camera.height - surfaceLinkedTop - displayHeight + CORAL_GARDEN_BACKDROP_EDGE_PADDING);
     const maxOffsetY = Math.max(0, waterlineInViewY - surfaceLinkedTop - CORAL_GARDEN_BACKDROP_EDGE_PADDING);
     const targetOffsetX = this.coralGardenBackdropRegionOffsetX(maxOffsetX);
-    this.coralGardenBackdropScrollOffset.y = Phaser.Math.Clamp(
-      this.coralGardenBackdropScrollOffset.y - deltaY * CORAL_GARDEN_BACKDROP_SCROLL_DRIFT_Y,
-      minOffsetY,
-      maxOffsetY,
-    );
+    this.coralGardenBackdropScrollOffset.y = snapToCamera
+      ? 0
+      : Phaser.Math.Clamp(
+        this.coralGardenBackdropScrollOffset.y - deltaY * CORAL_GARDEN_BACKDROP_SCROLL_DRIFT_Y,
+        minOffsetY,
+        maxOffsetY,
+      );
 
-    this.coralGardenBackdropOffset.x = Phaser.Math.Linear(
-      this.coralGardenBackdropOffset.x,
-      targetOffsetX,
-      CORAL_GARDEN_BACKDROP_RESPONSE,
-    );
-    this.coralGardenBackdropOffset.y = Phaser.Math.Linear(
-      this.coralGardenBackdropOffset.y,
-      Phaser.Math.Clamp(this.coralGardenBackdropScrollOffset.y, minOffsetY, maxOffsetY),
-      CORAL_GARDEN_BACKDROP_RESPONSE,
-    );
+    const targetOffsetY = Phaser.Math.Clamp(this.coralGardenBackdropScrollOffset.y, minOffsetY, maxOffsetY);
+    this.coralGardenBackdropOffset.x = snapToCamera
+      ? targetOffsetX
+      : Phaser.Math.Linear(this.coralGardenBackdropOffset.x, targetOffsetX, CORAL_GARDEN_BACKDROP_RESPONSE);
+    this.coralGardenBackdropOffset.y = snapToCamera
+      ? targetOffsetY
+      : Phaser.Math.Linear(this.coralGardenBackdropOffset.y, targetOffsetY, CORAL_GARDEN_BACKDROP_RESPONSE);
 
     const targetAlpha = this.coralGardenBackdropTargetAlpha() * this.backgroundImageVisibility;
     this.coralGardenBackdrop.setAlpha(targetAlpha).setVisible(targetAlpha > 0);
@@ -5805,7 +5822,7 @@ export class OceanScene extends Phaser.Scene {
     return Phaser.Math.Linear(maxOffsetX, -maxOffsetX, progress);
   }
 
-  private updateFinalBiomeBackgrounds() {
+  private updateFinalBiomeBackgrounds(snapToCamera = false) {
     if (this.finalBiomeBackgrounds.length === 0) return;
 
     const camera = this.cameras.main;
@@ -5823,11 +5840,10 @@ export class OceanScene extends Phaser.Scene {
       const displayHeight = texture.height * scale;
       const maxOffsetX = Math.max(0, (displayWidth - camera.width) / 2 - FINAL_BIOME_BACKGROUND_EDGE_PADDING);
       const worldProgress = this.finalBiomeBackgroundProgress(camera.scrollX + camera.width / 2);
-      layer.offset.x = Phaser.Math.Linear(
-        layer.offset.x,
-        Phaser.Math.Linear(maxOffsetX, -maxOffsetX, worldProgress),
-        FINAL_BIOME_BACKGROUND_RESPONSE,
-      );
+      const targetOffsetX = Phaser.Math.Linear(maxOffsetX, -maxOffsetX, worldProgress);
+      layer.offset.x = snapToCamera
+        ? targetOffsetX
+        : Phaser.Math.Linear(layer.offset.x, targetOffsetX, FINAL_BIOME_BACKGROUND_RESPONSE);
       const inCave = this.hero ? this.isHeroInCave() : false;
       const alpha = (inCave ? 0 : this.finalBiomeBackgroundAlphaAt(camera.scrollX + camera.width / 2)) * this.backgroundImageVisibility;
       layer.image.setAlpha(alpha).setVisible(alpha > 0);

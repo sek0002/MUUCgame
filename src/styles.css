@@ -17,6 +17,10 @@ canvas {
   image-rendering: pixelated;
 }
 
+#app.splash-mode:not(.splash-scene-ready) #game-root {
+  opacity: 0;
+}
+
 #hud {
   position: fixed;
   top: 14px;
