@@ -29,15 +29,19 @@ const MIN_RENDER_HEIGHT = 360;
 const MAX_RENDER_HEIGHT = 1080;
 const MIN_RENDER_WIDTH = 360;
 
+const isMobileRenderTarget = () => window.matchMedia("(hover: none), (pointer: coarse)").matches;
+const maxRenderHeight = () => (isMobileRenderTarget() ? DEFAULT_MOBILE_RENDER_HEIGHT : MAX_RENDER_HEIGHT);
+const clampRenderHeight = (height: number) =>
+  Phaser.Math.Clamp(Math.round(height), MIN_RENDER_HEIGHT, maxRenderHeight());
+
 const defaultRenderHeight = () => (
-  window.matchMedia("(hover: none), (pointer: coarse)").matches
-    ? DEFAULT_MOBILE_RENDER_HEIGHT
-    : DEFAULT_DESKTOP_RENDER_HEIGHT
+  isMobileRenderTarget() ? DEFAULT_MOBILE_RENDER_HEIGHT : DEFAULT_DESKTOP_RENDER_HEIGHT
 );
 
-let renderHeight = defaultRenderHeight();
+let renderHeight = clampRenderHeight(defaultRenderHeight());
 
 const getRenderSize = () => {
+  renderHeight = clampRenderHeight(renderHeight);
   const aspect = window.innerWidth / Math.max(1, window.innerHeight);
 
   return {
@@ -114,7 +118,7 @@ const config: Phaser.Types.Core.GameConfig = {
 const game = new Phaser.Game(config);
 
 window.setGameRenderHeight = (height: number) => {
-  renderHeight = Phaser.Math.Clamp(Math.round(height), MIN_RENDER_HEIGHT, MAX_RENDER_HEIGHT);
+  renderHeight = clampRenderHeight(height);
   const nextRenderSize = getRenderSize();
   game.scale.setGameSize(nextRenderSize.width, nextRenderSize.height);
   return renderHeight;
@@ -122,6 +126,7 @@ window.setGameRenderHeight = (height: number) => {
 window.getGameRenderHeight = () => renderHeight;
 
 window.addEventListener("resize", () => {
+  renderHeight = clampRenderHeight(renderHeight);
   const nextRenderSize = getRenderSize();
   game.scale.setGameSize(nextRenderSize.width, nextRenderSize.height);
 });
