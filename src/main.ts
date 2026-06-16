@@ -27,10 +27,12 @@ const DEFAULT_DESKTOP_RENDER_HEIGHT = 720;
 const DEFAULT_MOBILE_RENDER_HEIGHT = 480;
 const MIN_RENDER_HEIGHT = 360;
 const MAX_RENDER_HEIGHT = 1080;
-const MIN_RENDER_WIDTH = 360;
+const MIN_DESKTOP_RENDER_WIDTH = 360;
+const MIN_MOBILE_RENDER_WIDTH = 1;
 
 const isMobileRenderTarget = () => window.matchMedia("(hover: none), (pointer: coarse)").matches;
 const maxRenderHeight = () => (isMobileRenderTarget() ? DEFAULT_MOBILE_RENDER_HEIGHT : MAX_RENDER_HEIGHT);
+const minRenderWidth = () => (isMobileRenderTarget() ? MIN_MOBILE_RENDER_WIDTH : MIN_DESKTOP_RENDER_WIDTH);
 const clampRenderHeight = (height: number) =>
   Phaser.Math.Clamp(Math.round(height), MIN_RENDER_HEIGHT, maxRenderHeight());
 
@@ -45,7 +47,7 @@ const getRenderSize = () => {
   const aspect = window.innerWidth / Math.max(1, window.innerHeight);
 
   return {
-    width: Math.max(MIN_RENDER_WIDTH, Math.round(renderHeight * aspect)),
+    width: Math.max(minRenderWidth(), Math.round(renderHeight * aspect)),
     height: renderHeight,
   };
 };
