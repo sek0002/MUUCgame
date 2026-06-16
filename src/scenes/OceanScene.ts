@@ -77,6 +77,25 @@ type CreatureTrackPoint = {
   directionX: -1 | 1;
   pitch: number;
 };
+type KelpForestVariant = {
+  id: string;
+  key: string;
+  animationKey: string;
+  url: string;
+  frameWidth: number;
+  frameHeight: number;
+};
+type KelpBakeDescriptor = {
+  x: number;
+  y: number;
+  topY: number;
+  key: string;
+  frame: number;
+  scale: number;
+  alpha: number;
+  tint: number;
+  depth: number;
+};
 
 const BEACH_SHELF_START_X = BEACH_END_X * 0.7;
 const BEACH_SHELF_END_X = BEACH_END_X + 1500;
@@ -347,6 +366,31 @@ const SEAGRASS_STEEP_SLOPE_MAX_DENSITY_MULTIPLIER = 10;
 const SEAGRASS_STEEP_SLOPE_MIN_SPACING_FACTOR = 0.22;
 const SEAGRASS_MEADOW_TRANSITION_MIN_DELAY = 2000;
 const SEAGRASS_MEADOW_TRANSITION_MAX_DELAY = 5000;
+const KELP_FOREST_FRAME_COUNT = 8;
+const KELP_FOREST_FRAME_RATE = 5.55;
+const KELP_FOREST_START_MARGIN = 180;
+const KELP_FOREST_END_MARGIN = 420;
+const KELP_FOREST_ROW_COUNT = 4;
+const KELP_FOREST_BASE_SPACING = 86;
+const KELP_FOREST_SCALE_FACTOR = 0.71775;
+const KELP_FOREST_TERRAIN_LIFT = 76;
+const KELP_FOREST_ANIMATION_VIEW_MARGIN = 900;
+const KELP_FOREST_MAX_ANIMATED_PER_FRAME = 144;
+const KELP_FOREST_BAKE_DENSITY_THRESHOLD = 0.42;
+const KELP_FOREST_BAKE_CHUNK_WIDTH = 1400;
+const KELP_FOREST_BAKE_PADDING = 260;
+const KELP_FOREST_VARIANTS: KelpForestVariant[] = [
+  { id: "01", key: "kelp-random-01-sway", animationKey: "kelp-random-01-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-01-sway-sheet.png", frameWidth: 459, frameHeight: 858 },
+  { id: "02", key: "kelp-random-02-sway", animationKey: "kelp-random-02-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-02-sway-sheet.png", frameWidth: 512, frameHeight: 769 },
+  { id: "03", key: "kelp-random-03-sway", animationKey: "kelp-random-03-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-03-sway-sheet.png", frameWidth: 417, frameHeight: 943 },
+  { id: "04", key: "kelp-random-04-sway", animationKey: "kelp-random-04-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-04-sway-sheet.png", frameWidth: 484, frameHeight: 814 },
+  { id: "05", key: "kelp-random-05-sway", animationKey: "kelp-random-05-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-05-sway-sheet.png", frameWidth: 453, frameHeight: 868 },
+  { id: "06", key: "kelp-random-06-sway", animationKey: "kelp-random-06-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-06-sway-sheet.png", frameWidth: 519, frameHeight: 758 },
+  { id: "07", key: "kelp-random-07-sway", animationKey: "kelp-random-07-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-07-sway-sheet.png", frameWidth: 426, frameHeight: 924 },
+  { id: "08", key: "kelp-random-08-sway", animationKey: "kelp-random-08-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-08-sway-sheet.png", frameWidth: 482, frameHeight: 816 },
+  { id: "09", key: "kelp-random-09-sway", animationKey: "kelp-random-09-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-09-sway-sheet.png", frameWidth: 452, frameHeight: 870 },
+  { id: "10", key: "kelp-random-10-sway", animationKey: "kelp-random-10-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-10-sway-sheet.png", frameWidth: 547, frameHeight: 720 },
+];
 const SAND_PALETTE_LIGHT = 0xb5997a;
 const SAND_PALETTE_MID = 0x85573d;
 const SAND_PALETTE_DEEP = 0x6b4e32;
@@ -399,6 +443,11 @@ export class OceanScene extends Phaser.Scene {
   private coralGardenBackdropOffset = { x: 0, y: 0 };
   private finalBiomeBackgrounds: FinalBiomeBackgroundLayer[] = [];
   private seagrassMeadow: Array<{ sprite: Phaser.GameObjects.Sprite; frames: SeagrassFrameSet }> = [];
+  private kelpForest: Array<{
+    sprite: Phaser.GameObjects.Sprite;
+    animationKey: string;
+  }> = [];
+  private bakedKelpForest: Phaser.GameObjects.RenderTexture[] = [];
   private seagrassFrameTimer?: Phaser.Time.TimerEvent;
   private seagrassFrameIndex = 0;
   private heroVisibilityStatus: HeroVisibilityStatus = "visible";
@@ -501,6 +550,12 @@ export class OceanScene extends Phaser.Scene {
         this.load.image(frame.key, frame.url);
       }
     }
+    for (const variant of KELP_FOREST_VARIANTS) {
+      this.load.spritesheet(variant.key, assetUrl(variant.url), {
+        frameWidth: variant.frameWidth,
+        frameHeight: variant.frameHeight,
+      });
+    }
     this.load.image("shipwreck", assetUrl("/assets/landscape/shipwreck.png"));
     this.load.image("beach-house-only", assetUrl("/assets/landscape/beach-house-only.png"));
     this.load.image(this.finalBiomeBackgroundKey(), assetUrl(this.finalBiomeBackgroundUrl()));
@@ -552,6 +607,7 @@ export class OceanScene extends Phaser.Scene {
     this.createBubbleField();
     this.prepareSeagrassTextures();
     this.createSeagrassMeadows(world.zones);
+    this.createKelpForest(world.zones);
     this.createDecorations(world.decorations);
     this.createCreatureAnimations();
     this.createCreatures(world.creatures);
@@ -604,6 +660,7 @@ export class OceanScene extends Phaser.Scene {
     this.updateHeroPresentation();
     this.keepHeroInCameraView();
     this.updateBubbles(time, delta);
+    this.updateKelpForest();
     this.updateParallax(delta);
     this.updateTerrainLabelScale();
     this.updateHeroVisibilityStatus();
@@ -619,8 +676,9 @@ export class OceanScene extends Phaser.Scene {
       const color = t < 0.62
         ? this.mixHexColor(0x45c4ef, 0xcdf7ef, t / 0.62)
         : this.mixHexColor(0xcdf7ef, 0xfff5cf, (t - 0.62) / 0.38);
+      const height = Math.min(skyBandHeight, WATERLINE_Y - y);
       this.add
-        .rectangle(0, y, WORLD_WIDTH, skyBandHeight + 1, color)
+        .rectangle(0, y, WORLD_WIDTH, height, color)
         .setOrigin(0)
         .setDepth(-80);
     }
@@ -1336,7 +1394,7 @@ export class OceanScene extends Phaser.Scene {
   private createWaterSurface() {
     const surfaceTint = this.add.graphics().setDepth(WATER_OVERLAY_DEPTH);
     surfaceTint.fillStyle(0x2f8da0, 0.38);
-    surfaceTint.fillRect(0, WATERLINE_Y - 7, WORLD_WIDTH, 22);
+    surfaceTint.fillRect(0, WATERLINE_Y, WORLD_WIDTH, 15);
 
     this.addAnimatedWaveRibbon(WATERLINE_Y - 2, 0xd5fff2, 0.9, 5, 0.019, 13, 30, 14, 4200);
     this.addAnimatedWaveRibbon(WATERLINE_Y + 18, 0x75d2de, 0.6, 3, 0.015, 19, -24, 11, 4700);
@@ -2659,6 +2717,201 @@ export class OceanScene extends Phaser.Scene {
 
     this.setSeagrassFrame(this.seagrassFrameIndex);
     this.scheduleNextSeagrassFrame();
+  }
+
+  private createKelpForest(zones: OceanZone[]) {
+    const kelpZone = zones.find((zone) => zone.id === "kelp");
+    const shelfZone = zones.find((zone) => zone.id === "surface");
+    if (!kelpZone || this.terrainTopByColumn.size === 0) return;
+
+    this.kelpForest.forEach(({ sprite }) => sprite.destroy());
+    this.kelpForest = [];
+    this.bakedKelpForest.forEach((texture) => texture.destroy());
+    this.bakedKelpForest = [];
+
+    for (const variant of KELP_FOREST_VARIANTS) {
+      this.textures.get(variant.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      if (!this.anims.exists(variant.animationKey)) {
+        this.anims.create({
+          key: variant.animationKey,
+          frames: this.anims.generateFrameNumbers(variant.key, {
+            start: 0,
+            end: KELP_FOREST_FRAME_COUNT - 1,
+          }),
+          frameRate: KELP_FOREST_FRAME_RATE,
+          repeat: -1,
+        });
+      }
+    }
+
+    const startX = kelpZone.startX + KELP_FOREST_START_MARGIN;
+    const shelfFadeEndX = shelfZone
+      ? shelfZone.startX + (shelfZone.endX - shelfZone.startX) * 0.5
+      : kelpZone.endX - KELP_FOREST_END_MARGIN;
+    const endX = Math.max(kelpZone.endX - KELP_FOREST_END_MARGIN, shelfFadeEndX);
+    const peakX = (kelpZone.startX + kelpZone.endX) * 0.5;
+    if (endX <= startX) return;
+
+    const rowDepths = [-5.86, -5.8, -5.74, -5.68];
+    const rowOffsets = [22, 16, 9, 3];
+    const rowScales = [0.74, 0.9, 1.06, 1.22];
+    const rowSpacingMultipliers = [1.46, 1.18, 1, 0.86];
+    const bakeDescriptors: KelpBakeDescriptor[] = [];
+
+    for (let row = 0; row < KELP_FOREST_ROW_COUNT; row += 1) {
+      const spacing = KELP_FOREST_BASE_SPACING * rowSpacingMultipliers[row];
+      for (let column = 0, x = startX + row * spacing * 0.31; x <= endX; column += 1) {
+        const localNoise = this.deterministicUnit(column + row * 91, Math.floor(x / 19), this.caveSeed + 503);
+        const jitter = (this.deterministicUnit(column + 37, row + 113, this.caveSeed + 541) - 0.5) * spacing * 0.7;
+        const kelpX = Phaser.Math.Clamp(x + jitter, startX, endX);
+        const density = this.kelpForestDensityAt(kelpX, startX, peakX, endX, row);
+        x += spacing * Phaser.Math.Linear(1.42, 0.62, density);
+        if (localNoise > density) continue;
+
+        const terrainLineY = this.kelpTerrainLineYAt(kelpX);
+        const depthT = this.smooth01((terrainLineY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+        const variantIndex = Math.floor(
+          this.deterministicUnit(column + 149, row + 47, this.caveSeed + 577) * KELP_FOREST_VARIANTS.length,
+        ) % KELP_FOREST_VARIANTS.length;
+        const variant = KELP_FOREST_VARIANTS[variantIndex];
+        const scaleJitter = Phaser.Math.Linear(
+          0.78,
+          1.23,
+          this.deterministicUnit(column + 211, row + 79, this.caveSeed + 613),
+        );
+        const depthScale = Phaser.Math.Linear(1.08, 0.78, depthT);
+        const alpha = Phaser.Math.Clamp(0.5 + density * 0.42 - row * 0.035 - depthT * 0.08, 0.36, 0.92);
+        const baseY = terrainLineY + rowOffsets[row] + KELP_FOREST_TERRAIN_LIFT;
+        const intendedScale = rowScales[row] * scaleJitter * depthScale * KELP_FOREST_SCALE_FACTOR;
+        const maxHeightAboveWaterline = Math.max(48, (baseY - WATERLINE_Y) / 0.95);
+        const waterlineSafeScale = Math.min(intendedScale, maxHeightAboveWaterline / variant.frameHeight);
+        const frame = Math.floor(localNoise * KELP_FOREST_FRAME_COUNT);
+        const tint = this.kelpTintAt(kelpX, terrainLineY, row);
+        const depth = rowDepths[row] + column * 0.00003;
+        const shouldBake = row <= 2 && density >= KELP_FOREST_BAKE_DENSITY_THRESHOLD;
+
+        if (shouldBake) {
+          bakeDescriptors.push({
+            x: kelpX,
+            y: baseY,
+            topY: baseY - variant.frameHeight * waterlineSafeScale,
+            key: variant.key,
+            frame,
+            scale: waterlineSafeScale,
+            alpha,
+            tint,
+            depth,
+          });
+          continue;
+        }
+
+        const sprite = this.add
+          .sprite(kelpX, baseY, variant.key, frame)
+          .setOrigin(0.5, 1)
+          .setScale(waterlineSafeScale)
+          .setRotation(0)
+          .setDepth(depth)
+          .setAlpha(alpha)
+          .setTint(tint);
+
+        sprite.play({
+          key: variant.animationKey,
+          startFrame: Math.floor(this.deterministicUnit(column + 17, row + 19, this.caveSeed + 641) * KELP_FOREST_FRAME_COUNT),
+        });
+        sprite.anims.timeScale = Phaser.Math.Linear(0.76, 1.22, this.deterministicUnit(row + 5, column + 31, this.caveSeed + 677));
+        this.kelpForest.push({
+          sprite,
+          animationKey: variant.animationKey,
+        });
+      }
+    }
+
+    this.createBakedKelpForest(bakeDescriptors);
+  }
+
+  private createBakedKelpForest(descriptors: KelpBakeDescriptor[]) {
+    if (descriptors.length === 0) return;
+
+    const chunks = new Map<number, KelpBakeDescriptor[]>();
+    for (const descriptor of descriptors) {
+      const chunkIndex = Math.floor(descriptor.x / KELP_FOREST_BAKE_CHUNK_WIDTH);
+      const chunk = chunks.get(chunkIndex) ?? [];
+      chunk.push(descriptor);
+      chunks.set(chunkIndex, chunk);
+    }
+
+    for (const [chunkIndex, chunk] of chunks) {
+      const minX = chunkIndex * KELP_FOREST_BAKE_CHUNK_WIDTH - KELP_FOREST_BAKE_PADDING;
+      const maxX = minX + KELP_FOREST_BAKE_CHUNK_WIDTH + KELP_FOREST_BAKE_PADDING * 2;
+      const minY = Math.max(0, Math.floor(Math.min(...chunk.map((item) => item.topY)) - KELP_FOREST_BAKE_PADDING));
+      const maxY = Math.min(WORLD_HEIGHT, Math.ceil(Math.max(...chunk.map((item) => item.y)) + KELP_FOREST_BAKE_PADDING));
+      const width = Math.ceil(maxX - minX);
+      const height = Math.max(64, Math.ceil(maxY - minY));
+      const depth = Math.min(...chunk.map((item) => item.depth)) - 0.001;
+      const renderTexture = this.add
+        .renderTexture(minX, minY, width, height)
+        .setOrigin(0)
+        .setDepth(depth);
+
+      for (const descriptor of chunk) {
+        const stamp = this.add
+          .sprite(0, 0, descriptor.key, descriptor.frame)
+          .setOrigin(0.5, 1)
+          .setScale(descriptor.scale)
+          .setAlpha(descriptor.alpha)
+          .setTint(descriptor.tint)
+          .setVisible(false);
+        renderTexture.draw(stamp, descriptor.x - minX, descriptor.y - minY);
+        stamp.destroy();
+      }
+
+      this.bakedKelpForest.push(renderTexture);
+    }
+  }
+
+  private kelpForestDensityAt(x: number, startX: number, peakX: number, endX: number, row: number) {
+    const rise = this.smooth01((x - startX) / Math.max(1, peakX - startX));
+    const fall = 1 - this.smooth01((x - peakX) / Math.max(1, endX - peakX));
+    const bell = Phaser.Math.Clamp(Math.min(rise, fall), 0, 1);
+    const patchWave = Math.sin(x * 0.0024 + row * 1.7) * 0.08 + Math.sin(x * 0.0062 + row * 0.9) * 0.05;
+    const rowBoost = Phaser.Math.Linear(0.74, 1.04, row / Math.max(1, KELP_FOREST_ROW_COUNT - 1));
+    return Phaser.Math.Clamp((0.12 + bell * 0.76 + patchWave) * rowBoost, 0.06, 0.94);
+  }
+
+  private kelpTerrainLineYAt(x: number) {
+    return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn);
+  }
+
+  private kelpTintAt(x: number, y: number, row: number) {
+    const depthT = this.smooth01((y - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
+    const rowT = row / Math.max(1, KELP_FOREST_ROW_COUNT - 1);
+    const local = this.deterministicUnit(Math.floor(x / 41), Math.floor(y / 29), row + 809);
+    const base = rowT < 0.45 ? 0x88b84c : 0x72a83d;
+    const deep = rowT < 0.45 ? 0x2d6f55 : 0x225d46;
+    const tint = this.mixHexColor(base, deep, Phaser.Math.Clamp(depthT * 0.78 + local * 0.14, 0, 1));
+    return this.mixHexColor(tint, 0xd5ef8a, Phaser.Math.Clamp((1 - depthT) * 0.08 + rowT * 0.05, 0, 0.14));
+  }
+
+  private updateKelpForest() {
+    if (this.kelpForest.length === 0) return;
+    const camera = this.cameras.main;
+    const viewLeft = camera.worldView.x - KELP_FOREST_ANIMATION_VIEW_MARGIN;
+    const viewRight = camera.worldView.right + KELP_FOREST_ANIMATION_VIEW_MARGIN;
+    const centerX = camera.worldView.centerX;
+    const animated = this.kelpForest
+      .filter((kelp) => kelp.sprite.x >= viewLeft && kelp.sprite.x <= viewRight)
+      .sort((a, b) => Math.abs(a.sprite.x - centerX) - Math.abs(b.sprite.x - centerX))
+      .slice(0, KELP_FOREST_MAX_ANIMATED_PER_FRAME);
+    const animatedSprites = new Set(animated.map((kelp) => kelp.sprite));
+
+    for (const kelp of this.kelpForest) {
+      const shouldAnimate = animatedSprites.has(kelp.sprite);
+      if (shouldAnimate && !kelp.sprite.anims.isPlaying) {
+        kelp.sprite.play(kelp.animationKey, true);
+      } else if (!shouldAnimate && kelp.sprite.anims.isPlaying) {
+        kelp.sprite.stop();
+      }
+    }
   }
 
   private scheduleNextSeagrassFrame() {
