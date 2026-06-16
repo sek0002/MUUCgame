@@ -2984,15 +2984,14 @@ function generateCreatures(solid: boolean[][], random: () => number) {
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "blue-devil", randomCount(random, 2, 5), bommieAndLedgeBounds(), (tx, ty) => {
     return hasCreatureClearance(solid, tx, ty, 1, 1) && (isUnderLedgeTile(solid, tx, ty) || isBommieTopTile(solid, tx, ty));
   });
-  addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "crayfish", randomCount(random, 2, 4), fullOceanBounds(), (tx, ty) => {
-    return isCaveTile(solid, tx, ty) && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
-  });
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "killer-whale", randomCount(random, 1, 2), openOceanWaterBounds(), (tx, ty) => {
     return isOpenWaterTile(solid, tx, ty) && hasCreatureClearance(solid, tx, ty, 4, 2) && ty < seafloorTileFor(tx) - 8;
   });
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "nudhhi", randomCount(random, 2, 4), coralGardenBounds(), (tx, ty) => {
     return isShallowGardenZone(zoneAtX(tx * TILE).id) && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
+  addSeagrassMeadowPeekFish(creatures, solid, random, usedCreatureTiles);
+  addSeagrassMeadowPeckFish(creatures, solid, random, usedCreatureTiles);
   addSeagrassMeadowSolitaryFish(creatures, solid, random, usedCreatureTiles);
   addKingGeorgeWhiting(creatures, solid, random, usedCreatureTiles);
   addSeagrassMeadowSeadragons(creatures, solid, random, usedCreatureTiles);
@@ -3001,8 +3000,6 @@ function generateCreatures(solid: boolean[][], random: () => number) {
     const zoneId = zoneAtX(tx * TILE).id;
     return (isShallowGardenZone(zoneId) || zoneId === "surface") && isSupportedFloorTile(solid, tx, ty) && hasFloorCreatureClearance(solid, tx, ty);
   });
-  addSeagrassMeadowPeekFish(creatures, solid, random, usedCreatureTiles);
-  addSeagrassMeadowPeckFish(creatures, solid, random, usedCreatureTiles);
   addYellowBlueFishSchools(creatures, solid, random, usedCreatureTiles);
   return creatures;
 }

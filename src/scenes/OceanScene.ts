@@ -71,6 +71,12 @@ type DevCameraTools = {
   seedRandom: HTMLButtonElement;
   readout: HTMLOutputElement;
 };
+type CreatureTrackPoint = {
+  x: number;
+  y: number;
+  directionX: -1 | 1;
+  pitch: number;
+};
 
 const BEACH_SHELF_START_X = BEACH_END_X * 0.7;
 const BEACH_SHELF_END_X = BEACH_END_X + 1500;
@@ -99,6 +105,29 @@ const BUBBLE_MIN_SPACING_FROM_TERRAIN = 42;
 const HERO_RENDER_WIDTH = 115;
 const HERO_VISIBLE_DEPTH = 20;
 const HERO_SEAGRASS_HIDDEN_DEPTH = -4.52;
+const HERO_CAMERA_DESKTOP_LERP = 0.07;
+const HERO_CAMERA_MOBILE_LERP = 0.16;
+const HERO_CAMERA_MIN_SAFE_MARGIN_X = 58;
+const HERO_CAMERA_MIN_SAFE_MARGIN_Y = 74;
+const HERO_CAMERA_SAFE_MARGIN_X_RATIO = 0.22;
+const HERO_CAMERA_SAFE_MARGIN_Y_RATIO = 0.22;
+const HERO_CAMERA_DESKTOP_DEADZONE_X_RATIO = 0.28;
+const HERO_CAMERA_DESKTOP_DEADZONE_Y_RATIO = 0.26;
+const HERO_CAMERA_MOBILE_DEADZONE_X_RATIO = 0.16;
+const HERO_CAMERA_MOBILE_DEADZONE_Y_RATIO = 0.18;
+const CREATURE_TRACK_ROTATION_MAX_DEGREES = 16;
+const CREATURE_TERRAIN_UPHILL_ROTATION_MAX_DEGREES = 34;
+const CREATURE_TERRAIN_DOWNHILL_ROTATION_MAX_DEGREES = 56;
+const CREATURE_TRACK_ROTATION_RESPONSE = 0.16;
+const CREATURE_TERRAIN_TRACK_LIFT = 2;
+const CREATURE_TERRAIN_TRACK_SAMPLE = 7;
+const CREATURE_TERRAIN_INTERPOLATION_STEP = TILE;
+const CREATURE_SEAGRASS_TRACK_MARGIN = 118;
+const CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE = 310;
+const CREATURE_SCHOOL_TERRAIN_GUIDE_RESPONSE = 0.72;
+const CREATURE_FRONT_TRACK_DEFAULT_OFFSET_RATIO = 0.42;
+const CREATURE_FRONT_TRACK_RAY_OFFSET_RATIO = 0.34;
+const CREATURE_FRONT_TRACK_SEADRAGON_OFFSET_RATIO = 0.34;
 const HERO_SWIM_FRAMES = [
   CREATURES.hero.frames.tailRight.key,
   CREATURES.hero.frames.center.key,
@@ -184,6 +213,10 @@ const BULL_RAY_MIN_GLIDE_DISTANCE = 1100;
 const BULL_RAY_MIN_REST_DURATION = 8500;
 const BULL_RAY_MAX_REST_DURATION = 17000;
 const BULL_RAY_REST_CHANCE = 0.28;
+const BULL_RAY_SWIM_FRAME_RATE = 4;
+const BULL_RAY_REST_MAX_SLOPE_DEGREES = 8;
+const BULL_RAY_REST_SEARCH_ATTEMPTS = 10;
+const BULL_RAY_REST_SEARCH_RADIUS = 340;
 const SEAGRASS_MEADOW_SOURCE_HEIGHT = 526;
 const CORAL_BACKGROUND_DISPLAY_WIDTH = 9820;
 const CORAL_BACKGROUND_DISPLAY_HEIGHT = 1946;
@@ -347,6 +380,7 @@ export class OceanScene extends Phaser.Scene {
   private caveBiomeCurtain?: Phaser.GameObjects.Rectangle;
   private terrainLineLayer?: Phaser.GameObjects.Graphics;
   private terrainGuideLayer?: Phaser.GameObjects.Graphics;
+  private creatureTrackGuideLayer?: Phaser.GameObjects.Graphics;
   private terrainTopByColumn = new Map<number, number>();
   private terrainLabelLayer: Phaser.GameObjects.Text[] = [];
   private bubbleStreams: BubbleStream[] = [];
@@ -384,6 +418,7 @@ export class OceanScene extends Phaser.Scene {
   private caveTiles = new Set<string>();
   private loadingScreenStartedAt = 0;
   private performanceProfile: PerformanceProfile = this.defaultPerformanceProfile();
+  private heroCameraSize?: { width: number; height: number; profile: PerformanceProfile };
   private devCameraDragStart?: {
     pointerX: number;
     pointerY: number;
@@ -526,8 +561,7 @@ export class OceanScene extends Phaser.Scene {
     this.createLightingOverlay();
 
     this.physics.add.collider(this.hero, this.rocks);
-    this.cameras.main.startFollow(this.hero, true, 0.055, 0.055);
-    this.cameras.main.setDeadzone(190, 118);
+    this.applyHeroCameraFollowSettings(true);
     this.cameras.main.fadeIn(450, 5, 20, 31);
     this.hideLoadingScreen();
   }
@@ -567,6 +601,7 @@ export class OceanScene extends Phaser.Scene {
     this.updateSurfacePhysics(time);
     this.clampHeroSwimVelocity();
     this.updateHeroPresentation();
+    this.keepHeroInCameraView();
     this.updateBubbles(time, delta);
     this.updateParallax(delta);
     this.updateTerrainLabelScale();
@@ -734,6 +769,11 @@ export class OceanScene extends Phaser.Scene {
   private setPerformanceProfile(profile: PerformanceProfile) {
     if (this.performanceProfile === profile) return;
     this.performanceProfile = profile;
+    this.heroCameraSize = undefined;
+    if (this.hero && !this.devCameraEnabled) {
+      this.applyHeroCameraFollowSettings();
+      this.keepHeroInCameraView();
+    }
     const applyProfile = () => {
       for (const layer of this.finalBiomeBackgrounds) {
         layer.image.setTexture(this.finalBiomeBackgroundKey());
@@ -755,6 +795,77 @@ export class OceanScene extends Phaser.Scene {
     }
 
     applyProfile();
+  }
+
+  private applyHeroCameraFollowSettings(force = false) {
+    if (!this.hero || this.devCameraEnabled) return;
+    const camera = this.cameras.main;
+    const compact = this.isCompactCameraView();
+    const profile: PerformanceProfile = compact ? "mobile" : "desktop";
+    const cached = this.heroCameraSize;
+    if (!force && cached?.width === camera.width && cached.height === camera.height && cached.profile === profile) return;
+
+    const deadzoneWidth = Phaser.Math.Clamp(
+      camera.width * (compact ? HERO_CAMERA_MOBILE_DEADZONE_X_RATIO : HERO_CAMERA_DESKTOP_DEADZONE_X_RATIO),
+      0,
+      camera.width * 0.42,
+    );
+    const deadzoneHeight = Phaser.Math.Clamp(
+      camera.height * (compact ? HERO_CAMERA_MOBILE_DEADZONE_Y_RATIO : HERO_CAMERA_DESKTOP_DEADZONE_Y_RATIO),
+      0,
+      camera.height * 0.42,
+    );
+    const lerp = compact ? HERO_CAMERA_MOBILE_LERP : HERO_CAMERA_DESKTOP_LERP;
+
+    camera.startFollow(this.hero, true, lerp, lerp);
+    camera.setDeadzone(deadzoneWidth, deadzoneHeight);
+    this.heroCameraSize = { width: camera.width, height: camera.height, profile };
+  }
+
+  private isCompactCameraView() {
+    const camera = this.cameras.main;
+    return this.performanceProfile === "mobile" || camera.width < 640 || camera.height < 480;
+  }
+
+  private keepHeroInCameraView() {
+    if (!this.hero || this.devCameraEnabled) return;
+    this.applyHeroCameraFollowSettings();
+
+    const camera = this.cameras.main;
+    const visibleWidth = camera.width / camera.zoom;
+    const visibleHeight = camera.height / camera.zoom;
+    const marginX = Math.min(
+      visibleWidth * 0.38,
+      Math.max(HERO_CAMERA_MIN_SAFE_MARGIN_X, visibleWidth * HERO_CAMERA_SAFE_MARGIN_X_RATIO),
+    );
+    const marginY = Math.min(
+      visibleHeight * 0.38,
+      Math.max(HERO_CAMERA_MIN_SAFE_MARGIN_Y, visibleHeight * HERO_CAMERA_SAFE_MARGIN_Y_RATIO),
+    );
+
+    let nextScrollX = camera.scrollX;
+    let nextScrollY = camera.scrollY;
+    const minHeroX = nextScrollX + marginX;
+    const maxHeroX = nextScrollX + visibleWidth - marginX;
+    const minHeroY = nextScrollY + marginY;
+    const maxHeroY = nextScrollY + visibleHeight - marginY;
+
+    if (this.hero.x < minHeroX) nextScrollX -= minHeroX - this.hero.x;
+    if (this.hero.x > maxHeroX) nextScrollX += this.hero.x - maxHeroX;
+    if (this.hero.y < minHeroY) nextScrollY -= minHeroY - this.hero.y;
+    if (this.hero.y > maxHeroY) nextScrollY += this.hero.y - maxHeroY;
+
+    nextScrollX = visibleWidth >= WORLD_WIDTH
+      ? (WORLD_WIDTH - visibleWidth) / 2
+      : Phaser.Math.Clamp(nextScrollX, 0, WORLD_WIDTH - visibleWidth);
+    nextScrollY = visibleHeight >= WORLD_HEIGHT
+      ? (WORLD_HEIGHT - visibleHeight) / 2
+      : Phaser.Math.Clamp(nextScrollY, 0, WORLD_HEIGHT - visibleHeight);
+
+    if (Math.abs(nextScrollX - camera.scrollX) > 0.5 || Math.abs(nextScrollY - camera.scrollY) > 0.5) {
+      camera.scrollX = nextScrollX;
+      camera.scrollY = nextScrollY;
+    }
   }
 
   private shallowGardenDisplayZone(zones: OceanZone[]) {
@@ -2752,6 +2863,7 @@ export class OceanScene extends Phaser.Scene {
     for (const school of yellowBlueFishSchools.values()) {
       this.addYellowBlueFishSchoolTween(school);
     }
+    this.createCreatureTrackGuideLayer(creatures);
   }
 
   private createCreatureAnimations() {
@@ -2808,10 +2920,158 @@ export class OceanScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers(CREATURES.bullRay.key, {
           frames: [0, 1, 2, 3, 4, 5, 6, 7],
         }),
-        frameRate: 7,
+        frameRate: BULL_RAY_SWIM_FRAME_RATE,
         repeat: -1,
       });
     }
+  }
+
+  private createCreatureTrackGuideLayer(creatures: Array<{
+    x: number;
+    y: number;
+    assetKey: CreatureKey;
+    drift: number;
+    schoolId?: number;
+  }>) {
+    this.creatureTrackGuideLayer?.destroy();
+    const graphics = this.add.graphics().setDepth(4502).setVisible(this.devCameraEnabled);
+    this.creatureTrackGuideLayer = graphics;
+
+    this.strokeCreatureTrackLine(graphics, 0, WORLD_WIDTH, (x) => this.creatureTerrainGuideYAt(x), 0xffe66d, 0.78, 1);
+    this.strokeCreatureTrackLine(
+      graphics,
+      BEACH_END_X,
+      CORAL_END_X,
+      (x) => this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN),
+      0x45ff9a,
+      0.82,
+      1,
+    );
+    this.strokeCreatureTrackLine(
+      graphics,
+      BEACH_END_X,
+      CORAL_END_X,
+      (x) => this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN + 170),
+      0x56d7ff,
+      0.68,
+      1,
+    );
+    this.strokeCreatureTrackLine(
+      graphics,
+      BEACH_END_X,
+      KELP_END_X,
+      (x) => this.creatureTerrainGuideYAt(x) - CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE,
+      0xff8df5,
+      0.58,
+      1,
+    );
+
+    for (const spawn of creatures) {
+      this.drawCreatureTrackSpawnMarker(graphics, spawn);
+    }
+  }
+
+  private strokeCreatureTrackLine(
+    graphics: Phaser.GameObjects.Graphics,
+    startX: number,
+    endX: number,
+    yAt: (x: number) => number,
+    color: number,
+    alpha: number,
+    thickness: number,
+  ) {
+    const step = 22;
+    graphics.lineStyle(Math.max(1, thickness), 0x03111d, alpha * 0.5);
+    this.strokeDottedCreatureTrack(graphics, startX, endX, yAt, step, 11);
+    graphics.lineStyle(thickness, color, alpha);
+    this.strokeDottedCreatureTrack(graphics, startX, endX, yAt, step, 11);
+  }
+
+  private strokeDottedCreatureTrack(
+    graphics: Phaser.GameObjects.Graphics,
+    startX: number,
+    endX: number,
+    yAt: (x: number) => number,
+    step: number,
+    dashLength: number,
+  ) {
+    for (let x = startX; x <= endX; x += step) {
+      const dashEndX = Math.min(x + dashLength, endX);
+      graphics.beginPath();
+      graphics.moveTo(x, yAt(x));
+      graphics.lineTo(dashEndX, yAt(dashEndX));
+      graphics.strokePath();
+    }
+  }
+
+  private drawCreatureTrackSpawnMarker(
+    graphics: Phaser.GameObjects.Graphics,
+    spawn: { x: number; y: number; assetKey: CreatureKey; drift: number; schoolId?: number },
+  ) {
+    if (spawn.assetKey === "grass-whiting-peek" || spawn.assetKey === "grass-whiting-peck") return;
+
+    const color = this.creatureTrackDebugColor(spawn.assetKey);
+    graphics.fillStyle(0x03111d, 0.46);
+    graphics.fillCircle(spawn.x, spawn.y, 3);
+    graphics.fillStyle(color, 0.78);
+    graphics.fillCircle(spawn.x, spawn.y, 2);
+
+    if (this.isTerrainFollowingCreature(spawn.assetKey) || spawn.assetKey === "crayfish") {
+      const leftX = spawn.x - spawn.drift;
+      const rightX = spawn.x + spawn.drift;
+      graphics.lineStyle(1, color, 0.68);
+      this.strokeDottedCreatureTrack(
+        graphics,
+        Math.min(leftX, rightX),
+        Math.max(leftX, rightX),
+        (x) => this.creatureTerrainBoundaryYAt(x),
+        16,
+        8,
+      );
+    } else if (spawn.assetKey === "king-george-whiting" || spawn.assetKey === "dusky-morwong" || spawn.assetKey === "seadragon") {
+      const trackY =
+        spawn.assetKey === "king-george-whiting"
+          ? this.kingGeorgeWhitingRestYAt(spawn.x)
+          : this.seagrassCreatureTrackYAt(spawn.x, CREATURE_SEAGRASS_TRACK_MARGIN + 8);
+      graphics.fillStyle(color, 0.72);
+      graphics.fillRect(spawn.x - 10, trackY - 0.5, 20, 1);
+    } else if (spawn.assetKey === "yellow-blue-fish") {
+      graphics.lineStyle(1, color, 0.52);
+      this.strokeDottedVerticalCreatureTrack(
+        graphics,
+        spawn.x,
+        spawn.y,
+        this.creatureTerrainGuideYAt(spawn.x) - CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE,
+        5,
+        8,
+      );
+    }
+  }
+
+  private strokeDottedVerticalCreatureTrack(
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    startY: number,
+    endY: number,
+    step: number,
+    dashLength: number,
+  ) {
+    const direction = endY >= startY ? 1 : -1;
+    for (let y = startY; direction > 0 ? y <= endY : y >= endY; y += step * direction) {
+      const dashEndY = direction > 0 ? Math.min(y + dashLength, endY) : Math.max(y - dashLength, endY);
+      graphics.beginPath();
+      graphics.moveTo(x, y);
+      graphics.lineTo(x, dashEndY);
+      graphics.strokePath();
+    }
+  }
+
+  private creatureTrackDebugColor(assetKey: CreatureKey) {
+    if (assetKey === "yellow-blue-fish") return 0xff8df5;
+    if (assetKey === "king-george-whiting" || assetKey === "grass-whiting-peek" || assetKey === "grass-whiting-peck") return 0x45ff9a;
+    if (assetKey === "dusky-morwong" || assetKey === "seadragon" || assetKey === "bull-ray") return 0x56d7ff;
+    if (this.isTerrainFollowingCreature(assetKey) || assetKey === "crayfish") return 0xffe66d;
+    return 0xffffff;
   }
 
   private scheduleGrassWhitingPeek(sprite: Phaser.GameObjects.Sprite) {
@@ -2876,9 +3136,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private grassWhitingPeekRestYAt(x: number) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
+    const floorY = this.creatureTerrainGuideYAt(x);
     const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
     const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
     const foregroundGrassHeight =
@@ -2963,9 +3221,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private grassWhitingPeckRestYAt(x: number) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
+    const floorY = this.creatureTerrainGuideYAt(x);
     const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
     const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
     const foregroundGrassHeight =
@@ -3037,7 +3293,6 @@ export class OceanScene extends Phaser.Scene {
           const start = current;
 
           this.faceSprite(sprite, spawn.assetKey, directionX);
-          sprite.setRotation(0);
           sprite.play(KING_GEORGE_WHITING_GLIDE_KEY);
 
           this.tweens.add({
@@ -3047,7 +3302,7 @@ export class OceanScene extends Phaser.Scene {
             ease: "Sine.inOut",
             onUpdate: () => {
               if (!sprite.anims.isPlaying) sprite.setFrame(KING_GEORGE_WHITING_GLIDE_HOLD_FRAME);
-              const point = this.yellowBlueFishLinearTrackPoint(
+              const point = this.creatureTrackPoint(
                 start,
                 target,
                 progress.value,
@@ -3056,12 +3311,11 @@ export class OceanScene extends Phaser.Scene {
                 0,
               );
               const safePoint = this.kingGeorgeWhitingSafePoint(point.x, point.y, corridor);
-              sprite.setPosition(safePoint.x, safePoint.y);
+              this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, { ...point, ...safePoint }, 0.34);
             },
             onComplete: () => {
               current = this.kingGeorgeWhitingSafePoint(target.x, target.y, corridor);
-              sprite.setPosition(current.x, current.y);
-              sprite.setRotation(0);
+              this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, { ...current, directionX, pitch: sprite.rotation * directionX }, 1);
               sprite.stop();
               sprite.setFrame(KING_GEORGE_WHITING_REST_FRAME);
               restThenGlide();
@@ -3101,13 +3355,11 @@ export class OceanScene extends Phaser.Scene {
   ) {
     const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
     const restY = this.kingGeorgeWhitingRestYAt(safeX);
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(safeX, this.terrainTopByColumn)
-      : seafloorYAtX(safeX);
+    const trackFloorY = this.creatureTerrainGuideYAt(safeX);
 
     return {
       x: safeX,
-      y: Phaser.Math.Clamp(y, restY - 18, Math.min(restY + 18, floorY - 84)),
+      y: Phaser.Math.Clamp(y, restY - 18, Math.min(restY + 18, trackFloorY - 84)),
     };
   }
 
@@ -3118,7 +3370,7 @@ export class OceanScene extends Phaser.Scene {
       this.deterministicUnit(Math.floor(x / 11), this.caveSeed + 313, 0xa711),
     );
 
-    return this.seagrassCanopyTopYAt(x) - 18 + localOffset;
+    return this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN) - 18 + localOffset;
   }
 
   private addYellowBlueFishSchoolTween(school: {
@@ -3147,7 +3399,7 @@ export class OceanScene extends Phaser.Scene {
     const safeCorridor = this.yellowBlueFishSafeCorridor(schoolMarginX, schoolMarginY);
     let lastUpdateTime = this.time.now;
 
-    const updateMembers = (directionX: -1 | 1) => {
+    const updateMembers = (trackPoint: CreatureTrackPoint) => {
       const now = this.time.now;
       const seconds = Math.min((now - lastUpdateTime) / 1000, 0.08);
       lastUpdateTime = now;
@@ -3176,8 +3428,13 @@ export class OceanScene extends Phaser.Scene {
           Math.max(memberYRange.minY, WATERLINE_Y + memberSurfaceGap),
           memberYRange.maxY,
         );
-        member.sprite.setPosition(memberX, memberY);
-        this.faceSprite(member.sprite, "yellow-blue-fish", directionX);
+        const memberTrackPoint = { ...trackPoint, x: memberX, y: memberY };
+        if (this.isNearCreatureTerrainGuide(memberX, memberY)) {
+          this.placeCreatureFrontOnTrack(member.sprite, "yellow-blue-fish", memberTrackPoint, 0.22);
+        } else {
+          member.sprite.setPosition(memberX, memberY);
+          this.alignCreatureToTrack(member.sprite, "yellow-blue-fish", trackPoint);
+        }
       }
     };
 
@@ -3192,7 +3449,7 @@ export class OceanScene extends Phaser.Scene {
       const speedFactor = 2 + Math.random() * 3;
       const pixelsPerSecond = speedFactor * 38;
       const progress = { value: 0 };
-      updateMembers(directionX);
+      updateMembers({ x: start.x, y: start.y, directionX, pitch: 0 });
 
       this.tweens.add({
         targets: progress,
@@ -3200,7 +3457,7 @@ export class OceanScene extends Phaser.Scene {
         duration: Phaser.Math.Clamp((distance / pixelsPerSecond) * 1000, 4500, 28000),
         ease: "Sine.inOut",
         onUpdate: () => {
-          const point = this.yellowBlueFishLinearTrackPoint(
+          const point = this.creatureTrackPoint(
             start,
             target,
             progress.value,
@@ -3211,13 +3468,13 @@ export class OceanScene extends Phaser.Scene {
           const safePoint = this.yellowBlueFishSafeSchoolPoint(point.x, point.y, safeCorridor);
           school.motion.x = safePoint.x;
           school.motion.y = safePoint.y;
-          updateMembers(directionX);
+          updateMembers(point);
         },
         onComplete: swimNext,
       });
     };
 
-    updateMembers(1);
+    updateMembers({ x: school.motion.x, y: school.motion.y, directionX: 1, pitch: 0 });
     this.time.delayedCall(Math.random() * 900, swimNext);
   }
 
@@ -3248,13 +3505,34 @@ export class OceanScene extends Phaser.Scene {
       const driftY = Phaser.Math.Between(-SEADRAGON_MAX_DRIFT_Y, SEADRAGON_MAX_DRIFT_Y);
       currentDirection = nextDirection;
       const targetX = anchor.x + currentDirection * driftX;
+      const start = { x: sprite.x, y: sprite.y };
+      const target = { x: targetX, y: this.seadragonSafeYAt(targetX, anchor.y + driftY) };
+      const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+      const progress = { value: 0 };
 
       this.tweens.add({
-        targets: sprite,
-        x: targetX,
-        y: this.seadragonSafeYAt(targetX, anchor.y + driftY),
+        targets: progress,
+        value: 1,
         duration: Phaser.Math.Between(SEADRAGON_MIN_DRIFT_DURATION, SEADRAGON_MAX_DRIFT_DURATION),
         ease: "Sine.inOut",
+        onUpdate: () => {
+          const point = this.creatureTrackPoint(
+            start,
+            target,
+            progress.value,
+            Phaser.Math.Clamp(distance * 0.018, 4, 16),
+            0.45,
+            0,
+          );
+          this.faceSeadragon(sprite, point.directionX);
+          this.placeCreatureFrontOnTrack(
+            sprite,
+            spawn.assetKey,
+            point,
+            0.24,
+            this.seadragonBaseRotation(point.directionX, baseRotationMagnitude) + point.pitch * 0.55,
+          );
+        },
         onComplete: driftToNextPoint,
       });
     };
@@ -3323,7 +3601,6 @@ export class OceanScene extends Phaser.Scene {
           const progress = { value: 0 };
 
           this.faceSprite(sprite, spawn.assetKey, directionX);
-          sprite.setRotation(0);
           sprite.play({
             key: DUSKY_MORWONG_SWIM_KEY,
             startFrame: Math.floor(Math.random() * 4),
@@ -3335,7 +3612,7 @@ export class OceanScene extends Phaser.Scene {
             duration: Phaser.Math.Clamp((distance / swimSpeed) * 1000, 18000, 78000),
             ease: "Sine.inOut",
             onUpdate: () => {
-              const point = this.yellowBlueFishLinearTrackPoint(
+              const point = this.creatureTrackPoint(
                 current,
                 target,
                 progress.value,
@@ -3344,12 +3621,11 @@ export class OceanScene extends Phaser.Scene {
                 phase,
               );
               const safePoint = this.duskyMorwongSafePoint(point.x, point.y, corridor);
-              sprite.setPosition(safePoint.x, safePoint.y);
+              this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, { ...point, ...safePoint }, 0.3);
             },
             onComplete: () => {
               current = this.duskyMorwongSafePoint(target.x, target.y, corridor);
-              sprite.setPosition(current.x, current.y);
-              sprite.setRotation(0);
+              this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, { ...current, directionX, pitch: sprite.rotation * directionX }, 1);
               restThenSwim();
             },
           });
@@ -3405,12 +3681,10 @@ export class OceanScene extends Phaser.Scene {
     x: number,
     corridor: { minY: number; maxY: number },
   ) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
-    const canopyY = this.seagrassCanopyTopYAt(x);
-    const minY = Math.max(corridor.minY, canopyY + 10);
-    const maxY = Math.min(corridor.maxY, floorY - 86);
+    const guideY = this.creatureTerrainGuideYAt(x);
+    const trackY = this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN + 8);
+    const minY = Math.max(corridor.minY, trackY - 28);
+    const maxY = Math.min(corridor.maxY, guideY - 86, trackY + 72);
 
     return { minY, maxY: Math.max(minY + 42, maxY) };
   }
@@ -3437,12 +3711,15 @@ export class OceanScene extends Phaser.Scene {
     const scheduleNext = () => {
       if (!sprite.active) return;
       if (Math.random() < BULL_RAY_REST_CHANCE) {
-        this.bullRayRest(sprite, current, corridor, () => {
-          if (!sprite.active) return;
-          current = this.bullRaySafePoint(sprite.x, sprite.y, corridor, "rest");
-          this.time.delayedCall(Phaser.Math.Between(500, 1800), scheduleNext);
-        });
-        return;
+        const restPoint = this.bullRayFlatRestPoint(current, corridor);
+        if (restPoint) {
+          this.bullRayRest(sprite, current, restPoint, corridor, () => {
+            if (!sprite.active) return;
+            current = this.bullRaySafePoint(sprite.x, sprite.y, corridor, "rest");
+            this.time.delayedCall(Phaser.Math.Between(500, 1800), scheduleNext);
+          });
+          return;
+        }
       }
 
       const target = this.bullRayTarget(current, corridor, spawn.drift);
@@ -3512,10 +3789,8 @@ export class OceanScene extends Phaser.Scene {
     const cruiseDuration = Phaser.Math.Clamp((cruiseDistance / speed) * 1000, 18000, 150000);
 
     const placeAt = (t: number) => {
-      sprite.setPosition(
-        Phaser.Math.Linear(start.x, target.x, t),
-        Phaser.Math.Linear(start.y, target.y, t),
-      );
+      const point = this.creatureTrackPoint(start, target, t, Phaser.Math.Clamp(distance * 0.012, 6, 24), 0.35, 0);
+      this.placeCreatureFrontOnTrack(sprite, assetKey, point, 0.3);
     };
 
     const playImpulseAnimation = () => {
@@ -3571,15 +3846,10 @@ export class OceanScene extends Phaser.Scene {
   private bullRayRest(
     sprite: Phaser.GameObjects.Sprite,
     current: { x: number; y: number },
+    restPoint: { x: number; y: number },
     corridor: { minX: number; maxX: number; zoneId: "coral" | "kelp" },
     onComplete: () => void,
   ) {
-    const restPoint = this.bullRaySafePoint(
-      current.x + Phaser.Math.Between(-260, 260),
-      this.bullRayRestYAt(current.x),
-      corridor,
-      "rest",
-    );
     const resumePoint = this.bullRaySafePoint(
       restPoint.x + Phaser.Math.Between(-420, 420),
       this.bullRayCruiseYAt(restPoint.x, corridor),
@@ -3588,18 +3858,45 @@ export class OceanScene extends Phaser.Scene {
     );
     const descendDistance = Phaser.Math.Distance.Between(current.x, current.y, restPoint.x, restPoint.y);
     const ascendDistance = Phaser.Math.Distance.Between(restPoint.x, restPoint.y, resumePoint.x, resumePoint.y);
+    const glideAlongTrack = (
+      start: { x: number; y: number },
+      target: { x: number; y: number },
+      duration: number,
+      ease: string,
+      done: () => void,
+    ) => {
+      const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+      const progress = { value: 0 };
+      this.tweens.add({
+        targets: progress,
+        value: 1,
+        duration,
+        ease,
+        onUpdate: () => {
+          const point = this.creatureTrackPoint(
+            start,
+            target,
+            progress.value,
+            Phaser.Math.Clamp(distance * 0.012, 4, 18),
+            0.35,
+            0,
+          );
+          this.placeCreatureFrontOnTrack(sprite, "bull-ray", point, 0.3);
+        },
+        onComplete: done,
+      });
+    };
 
     sprite.play({
       key: BULL_RAY_SWIM_KEY,
       startFrame: Math.floor(Math.random() * 8),
     });
-    this.tweens.add({
-      targets: sprite,
-      x: restPoint.x,
-      y: restPoint.y,
-      duration: Phaser.Math.Clamp((descendDistance / 18) * 1000, 4200, 16000),
-      ease: "Sine.out",
-      onComplete: () => {
+    glideAlongTrack(
+      current,
+      restPoint,
+      Phaser.Math.Clamp((descendDistance / 18) * 1000, 4200, 16000),
+      "Sine.out",
+      () => {
         sprite.stop();
         sprite.setFrame(0);
         this.time.delayedCall(
@@ -3612,21 +3909,45 @@ export class OceanScene extends Phaser.Scene {
               key: BULL_RAY_SWIM_KEY,
               startFrame: Math.floor(Math.random() * 8),
             });
-            this.tweens.add({
-              targets: sprite,
-              x: resumePoint.x,
-              y: resumePoint.y,
-              duration: Phaser.Math.Clamp((ascendDistance / 16) * 1000, 5200, 18000),
-              ease: "Sine.inOut",
-              onComplete: () => {
+            glideAlongTrack(
+              restPoint,
+              resumePoint,
+              Phaser.Math.Clamp((ascendDistance / 16) * 1000, 5200, 18000),
+              "Sine.inOut",
+              () => {
                 sprite.stop();
                 onComplete();
               },
-            });
+            );
           },
         );
       },
-    });
+    );
+  }
+
+  private bullRayFlatRestPoint(
+    current: { x: number; y: number },
+    corridor: { minX: number; maxX: number; zoneId: "coral" | "kelp" },
+  ) {
+    const candidates: Array<{ x: number; y: number; slope: number; distance: number }> = [];
+    for (let attempt = 0; attempt < BULL_RAY_REST_SEARCH_ATTEMPTS; attempt += 1) {
+      const spread = attempt === 0
+        ? 0
+        : Phaser.Math.FloatBetween(-BULL_RAY_REST_SEARCH_RADIUS, BULL_RAY_REST_SEARCH_RADIUS);
+      const x = Phaser.Math.Clamp(current.x + spread, corridor.minX, corridor.maxX);
+      const slope = Math.abs(this.creatureTerrainGuideSlopeAt(x, 72));
+      if (slope > Phaser.Math.DegToRad(BULL_RAY_REST_MAX_SLOPE_DEGREES)) continue;
+      const point = this.bullRaySafePoint(x, this.bullRayRestYAt(x), corridor, "rest");
+      candidates.push({
+        ...point,
+        slope,
+        distance: Phaser.Math.Distance.Between(current.x, current.y, point.x, point.y),
+      });
+    }
+
+    if (candidates.length === 0) return undefined;
+    candidates.sort((a, b) => a.slope - b.slope || a.distance - b.distance);
+    return { x: candidates[0].x, y: candidates[0].y };
   }
 
   private bullRaySafePoint(
@@ -3640,9 +3961,7 @@ export class OceanScene extends Phaser.Scene {
       return { x: safeX, y: this.bullRayRestYAt(safeX) };
     }
 
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(safeX, this.terrainTopByColumn)
-      : seafloorYAtX(safeX);
+    const floorY = this.creatureTerrainGuideYAt(safeX);
     const cruiseY = this.bullRayCruiseYAt(safeX, corridor);
     const minY = WATERLINE_Y + 145;
     const maxY = Math.max(minY + 40, floorY - 138);
@@ -3657,28 +3976,20 @@ export class OceanScene extends Phaser.Scene {
     x: number,
     corridor: { zoneId: "coral" | "kelp" },
   ) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
+    const floorY = this.creatureTerrainGuideYAt(x);
     if (corridor.zoneId === "coral") {
-      return Phaser.Math.Clamp(this.seagrassCanopyTopYAt(x) - 118, WATERLINE_Y + 150, floorY - 170);
+      return Phaser.Math.Clamp(this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN + 170), WATERLINE_Y + 150, floorY - 170);
     }
 
     return Phaser.Math.Clamp(floorY - 270, WATERLINE_Y + 165, floorY - 150);
   }
 
   private bullRayRestYAt(x: number) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
-
-    return floorY - 34;
+    return this.creatureTerrainGuideYAt(x) - 34;
   }
 
   private seagrassCanopyTopYAt(x: number) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
+    const floorY = this.creatureTerrainGuideYAt(x);
     const depthT = this.smooth01((floorY - WATERLINE_Y) / (WORLD_HEIGHT - WATERLINE_Y));
     const depthScale = Phaser.Math.Linear(1.05, 0.78, depthT);
 
@@ -3686,14 +3997,12 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private seadragonSafeYAt(x: number, y: number) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
-    const canopyY = this.seagrassCanopyTopYAt(x);
-    const minY = Math.max(WATERLINE_Y + 118, canopyY + 36);
+    const floorY = this.creatureTerrainGuideYAt(x);
+    const trackY = this.seagrassCreatureTrackYAt(x, CREATURE_SEAGRASS_TRACK_MARGIN + 24);
+    const minY = Math.max(WATERLINE_Y + 118, trackY - 42);
     const maxY = Math.max(minY, floorY - 92);
 
-    return Phaser.Math.Clamp(y, minY, maxY);
+    return Phaser.Math.Clamp(y, minY, Math.min(maxY, trackY + 52));
   }
 
   private faceSeadragon(sprite: Phaser.GameObjects.Components.Flip, directionX: -1 | 1) {
@@ -3770,10 +4079,11 @@ export class OceanScene extends Phaser.Scene {
     corridor: { minX: number; maxX: number; minY: number; maxY: number; marginBottom: number },
   ) {
     const safeX = Phaser.Math.Clamp(x, corridor.minX, corridor.maxX);
+    const guidedY = this.guideSchoolYNearTerrain(safeX, y, corridor);
     const yRange = this.yellowBlueFishSafeYRangeAt(safeX, corridor);
     return {
       x: safeX,
-      y: Phaser.Math.Clamp(y, yRange.minY, yRange.maxY),
+      y: Phaser.Math.Clamp(guidedY, yRange.minY, yRange.maxY),
     };
   }
 
@@ -3781,12 +4091,26 @@ export class OceanScene extends Phaser.Scene {
     x: number,
     corridor: { minY: number; maxY: number; marginBottom: number },
   ) {
-    const floorY = this.terrainTopByColumn.size > 0
-      ? this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn)
-      : seafloorYAtX(x);
+    const floorY = this.creatureTerrainGuideYAt(x);
     const minY = corridor.minY;
-    const maxY = Math.min(corridor.maxY, floorY - corridor.marginBottom);
+    const maxY = Math.min(corridor.maxY, floorY - 48);
     return { minY, maxY: Math.max(minY + 80, maxY) };
+  }
+
+  private guideSchoolYNearTerrain(
+    x: number,
+    y: number,
+    corridor: { marginBottom: number },
+  ) {
+    const guideY = this.creatureTerrainGuideYAt(x);
+    const targetY = guideY - corridor.marginBottom;
+    const distanceFromGuide = guideY - y;
+    if (distanceFromGuide >= CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE) return y;
+
+    const influence = this.smooth01(
+      1 - Phaser.Math.Clamp(distanceFromGuide / CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE, 0, 1),
+    );
+    return Phaser.Math.Linear(y, Math.min(y, targetY), influence * CREATURE_SCHOOL_TERRAIN_GUIDE_RESPONSE);
   }
 
   private yellowBlueFishTrackIsSafe(
@@ -3798,7 +4122,7 @@ export class OceanScene extends Phaser.Scene {
     phase: number,
   ) {
     for (let step = 0; step <= 18; step += 1) {
-      const point = this.yellowBlueFishLinearTrackPoint(
+      const point = this.creatureTrackPoint(
         start,
         target,
         step / 18,
@@ -3813,7 +4137,48 @@ export class OceanScene extends Phaser.Scene {
     return true;
   }
 
-  private yellowBlueFishLinearTrackPoint(
+  private creatureTrackPoint(
+    start: { x: number; y: number },
+    target: { x: number; y: number },
+    t: number,
+    lateralAmplitude: number,
+    cycles: number,
+    phase: number,
+  ): CreatureTrackPoint {
+    const clampedT = Phaser.Math.Clamp(t, 0, 1);
+    const smoothT = clampedT * clampedT * (3 - 2 * clampedT);
+    const x = Phaser.Math.Linear(start.x, target.x, smoothT);
+    const y = Phaser.Math.Linear(start.y, target.y, smoothT);
+    const dx = target.x - start.x;
+    const dy = target.y - start.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / length;
+    const normalY = dx / length;
+    const envelope = Math.sin(clampedT * Math.PI);
+    const wave = Math.sin(clampedT * Math.PI * 2 * cycles + phase);
+    const lateral = wave * lateralAmplitude * envelope;
+    const epsilon = 0.006;
+    const aheadT = Phaser.Math.Clamp(clampedT + epsilon, 0, 1);
+    const behindT = Phaser.Math.Clamp(clampedT - epsilon, 0, 1);
+    const ahead = this.creatureTrackPosition(start, target, aheadT, lateralAmplitude, cycles, phase);
+    const behind = this.creatureTrackPosition(start, target, behindT, lateralAmplitude, cycles, phase);
+    const tangentX = ahead.x - behind.x;
+    const tangentY = ahead.y - behind.y;
+    const directionX: -1 | 1 = tangentX >= 0 ? 1 : -1;
+
+    return {
+      x: x + normalX * lateral,
+      y: y + normalY * lateral,
+      directionX,
+      pitch: Phaser.Math.Clamp(
+        Math.atan2(tangentY, Math.max(1, Math.abs(tangentX))),
+        Phaser.Math.DegToRad(-CREATURE_TRACK_ROTATION_MAX_DEGREES),
+        Phaser.Math.DegToRad(CREATURE_TRACK_ROTATION_MAX_DEGREES),
+      ),
+    };
+  }
+
+  private creatureTrackPosition(
     start: { x: number; y: number },
     target: { x: number; y: number },
     t: number,
@@ -3821,18 +4186,109 @@ export class OceanScene extends Phaser.Scene {
     cycles: number,
     phase: number,
   ) {
-    const x = Phaser.Math.Linear(start.x, target.x, t);
-    const y = Phaser.Math.Linear(start.y, target.y, t);
+    const clampedT = Phaser.Math.Clamp(t, 0, 1);
+    const smoothT = clampedT * clampedT * (3 - 2 * clampedT);
+    const x = Phaser.Math.Linear(start.x, target.x, smoothT);
+    const y = Phaser.Math.Linear(start.y, target.y, smoothT);
     const dx = target.x - start.x;
     const dy = target.y - start.y;
     const length = Math.max(1, Math.hypot(dx, dy));
     const normalX = -dy / length;
     const normalY = dx / length;
-    const lateral = Math.sin(t * Math.PI * 2 * cycles + phase) * lateralAmplitude * Math.sin(t * Math.PI);
+    const lateral =
+      Math.sin(clampedT * Math.PI * 2 * cycles + phase) *
+      lateralAmplitude *
+      Math.sin(clampedT * Math.PI);
 
     return {
       x: x + normalX * lateral,
       y: y + normalY * lateral,
+    };
+  }
+
+  private alignCreatureToTrack(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    assetKey: CreatureKey,
+    point: CreatureTrackPoint,
+    response = CREATURE_TRACK_ROTATION_RESPONSE,
+  ) {
+    this.faceSprite(sprite, assetKey, point.directionX);
+    const targetRotation = point.directionX * point.pitch;
+    const delta = Phaser.Math.Angle.Wrap(targetRotation - sprite.rotation);
+    sprite.setRotation(sprite.rotation + delta * response);
+  }
+
+  private placeCreatureFrontOnTrack(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    assetKey: CreatureKey,
+    point: CreatureTrackPoint,
+    response = CREATURE_TRACK_ROTATION_RESPONSE,
+    rotationOverride?: number,
+  ) {
+    if (assetKey === "seadragon") {
+      this.faceSeadragon(sprite, point.directionX);
+    } else {
+      this.faceSprite(sprite, assetKey, point.directionX);
+    }
+
+    const targetRotation = rotationOverride ?? point.directionX * point.pitch;
+    const delta = Phaser.Math.Angle.Wrap(targetRotation - sprite.rotation);
+    const rotation = sprite.rotation + delta * response;
+    sprite.setRotation(rotation);
+
+    const offset = this.creatureFrontTrackOffset(sprite, assetKey);
+    const forwardPitch = Math.abs(point.pitch);
+    const frontVectorX = point.directionX * Math.cos(forwardPitch);
+    const frontVectorY = Math.sin(point.pitch);
+    sprite.setPosition(
+      point.x - frontVectorX * offset,
+      point.y - frontVectorY * offset,
+    );
+  }
+
+  private creatureFrontTrackOffset(
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    assetKey: CreatureKey,
+  ) {
+    const ratio =
+      assetKey === "bull-ray" || assetKey === "smooth-sting-ray"
+        ? CREATURE_FRONT_TRACK_RAY_OFFSET_RATIO
+        : assetKey === "seadragon"
+          ? CREATURE_FRONT_TRACK_SEADRAGON_OFFSET_RATIO
+          : CREATURE_FRONT_TRACK_DEFAULT_OFFSET_RATIO;
+    return sprite.displayWidth * ratio;
+  }
+
+  private isNearCreatureTerrainGuide(x: number, y: number) {
+    return this.creatureTerrainGuideYAt(x) - y < CREATURE_SCHOOL_TERRAIN_GUIDE_DISTANCE;
+  }
+
+  private terrainTrackPointAt(
+    x: number,
+    directionX: -1 | 1,
+  ): CreatureTrackPoint {
+    const behindX = x - directionX * CREATURE_TERRAIN_TRACK_SAMPLE;
+    const aheadX = x + directionX * CREATURE_TERRAIN_TRACK_SAMPLE;
+    const behindY = this.creatureTerrainBoundaryYAt(behindX);
+    const aheadY = this.creatureTerrainBoundaryYAt(aheadX);
+    const rawPitch = Math.atan2(aheadY - behindY, Math.max(1, Math.abs(aheadX - behindX)));
+    const movingDownSlope = aheadY > behindY;
+    const maxPitch = Phaser.Math.DegToRad(
+      movingDownSlope
+        ? CREATURE_TERRAIN_DOWNHILL_ROTATION_MAX_DEGREES
+        : CREATURE_TERRAIN_UPHILL_ROTATION_MAX_DEGREES,
+    );
+    const pitch = Phaser.Math.Clamp(
+      rawPitch,
+      -maxPitch,
+      maxPitch,
+    );
+
+    return {
+      x,
+      y: this.creatureTerrainBoundaryYAt(x),
+      directionX,
+      pitch,
     };
   }
 
@@ -3856,8 +4312,10 @@ export class OceanScene extends Phaser.Scene {
     spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
   ) {
     const motion = { offset: -spawn.drift };
-    sprite.setPosition(spawn.x + motion.offset, this.creatureTerrainBoundaryYAt(spawn.x + motion.offset));
-    this.faceSprite(sprite, spawn.assetKey, 1);
+    const initialPoint = this.terrainTrackPointAt(spawn.x + motion.offset, 1);
+    let previousX = initialPoint.x;
+    sprite.setPosition(initialPoint.x, initialPoint.y);
+    this.alignCreatureToTrack(sprite, spawn.assetKey, initialPoint, 1);
 
     this.tweens.add({
       targets: motion,
@@ -3868,7 +4326,10 @@ export class OceanScene extends Phaser.Scene {
       ease: "Sine.inOut",
       onUpdate: () => {
         const x = spawn.x + motion.offset;
-        sprite.setPosition(x, this.creatureTerrainBoundaryYAt(x));
+        const directionX: -1 | 1 = x >= previousX ? 1 : -1;
+        previousX = x;
+        const point = this.terrainTrackPointAt(x, directionX);
+        this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, point, 0.34);
       },
       onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
       onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
@@ -3879,15 +4340,25 @@ export class OceanScene extends Phaser.Scene {
     sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
     spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
   ) {
+    const start = { x: spawn.x, y: spawn.y };
+    const target = { x: spawn.x + spawn.drift * 0.62, y: this.creatureTerrainBoundaryYAt(spawn.x + spawn.drift * 0.62) };
+    const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+    const progress = { value: 0 };
+    let previousX = start.x;
     this.tweens.add({
-      targets: sprite,
-      x: spawn.x + spawn.drift * 0.62,
+      targets: progress,
+      value: 1,
       duration: 3600 + spawn.drift * 42,
       yoyo: true,
       repeat: -1,
       ease: "Sine.inOut",
-      onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
-      onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
+      onUpdate: () => {
+        const point = this.creatureTrackPoint(start, target, progress.value, Phaser.Math.Clamp(distance * 0.01, 3, 12), 0.35, 0);
+        if (Math.abs(point.x - previousX) > 0.05) point.directionX = point.x >= previousX ? 1 : -1;
+        previousX = point.x;
+        const terrainPoint = this.terrainTrackPointAt(point.x, point.directionX);
+        this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, terrainPoint, 0.3);
+      },
     });
   }
 
@@ -3895,16 +4366,30 @@ export class OceanScene extends Phaser.Scene {
     sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
     spawn: { x: number; y: number; assetKey: CreatureKey; drift: number },
   ) {
+    const start = { x: spawn.x, y: spawn.y };
+    const target = { x: spawn.x + spawn.drift, y: spawn.y + Math.sin(spawn.x) * 16 };
+    const distance = Phaser.Math.Distance.Between(start.x, start.y, target.x, target.y);
+    const progress = { value: 0 };
+    let previousX = start.x;
+    this.faceSprite(sprite, spawn.assetKey, target.x >= start.x ? 1 : -1);
     this.tweens.add({
-      targets: sprite,
-      x: spawn.x + spawn.drift,
-      y: spawn.y + Math.sin(spawn.x) * 16,
+      targets: progress,
+      value: 1,
       duration: 2600 + spawn.drift * 45,
       yoyo: true,
       repeat: -1,
       ease: "Sine.inOut",
-      onYoyo: () => this.faceSprite(sprite, spawn.assetKey, -1),
-      onRepeat: () => this.faceSprite(sprite, spawn.assetKey, 1),
+      onUpdate: () => {
+        const point = this.creatureTrackPoint(start, target, progress.value, Phaser.Math.Clamp(distance * 0.018, 4, 20), 0.5, 0);
+        if (Math.abs(point.x - previousX) > 0.05) point.directionX = point.x >= previousX ? 1 : -1;
+        previousX = point.x;
+        if (this.isNearCreatureTerrainGuide(point.x, point.y)) {
+          this.placeCreatureFrontOnTrack(sprite, spawn.assetKey, point, 0.24);
+        } else {
+          sprite.setPosition(point.x, point.y);
+          this.alignCreatureToTrack(sprite, spawn.assetKey, point);
+        }
+      },
     });
   }
 
@@ -3913,8 +4398,40 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private creatureTerrainBoundaryYAt(x: number) {
+    return this.creatureTerrainGuideYAt(x) + CREATURE_TERRAIN_TRACK_LIFT;
+  }
+
+  private seagrassCreatureTrackYAt(x: number, margin: number) {
+    return this.creatureTerrainGuideYAt(x) - margin;
+  }
+
+  private creatureTerrainGuideYAt(x: number) {
+    return this.creatureContinuousTerrainYAt(x);
+  }
+
+  private creatureTerrainGuideSlopeAt(x: number, sampleDistance: number) {
+    const leftX = Phaser.Math.Clamp(x - sampleDistance, 0, WORLD_WIDTH);
+    const rightX = Phaser.Math.Clamp(x + sampleDistance, 0, WORLD_WIDTH);
+    if (rightX <= leftX) return 0;
+    return Math.atan2(
+      this.creatureTerrainGuideYAt(rightX) - this.creatureTerrainGuideYAt(leftX),
+      rightX - leftX,
+    );
+  }
+
+  private creatureContinuousTerrainYAt(x: number) {
     if (this.terrainTopByColumn.size === 0) return seafloorYAtX(x);
-    return this.smoothedTerrainGuideYAt(x, this.terrainTopByColumn) + 2;
+    const clampedX = Phaser.Math.Clamp(x, 0, WORLD_WIDTH);
+    const leftX = Math.floor(clampedX / CREATURE_TERRAIN_INTERPOLATION_STEP) * CREATURE_TERRAIN_INTERPOLATION_STEP;
+    const rightX = Math.min(WORLD_WIDTH, leftX + CREATURE_TERRAIN_INTERPOLATION_STEP);
+    if (rightX <= leftX) return this.smoothedTerrainGuideYAt(clampedX, this.terrainTopByColumn);
+
+    const t = this.smooth01((clampedX - leftX) / (rightX - leftX));
+    return Phaser.Math.Linear(
+      this.smoothedTerrainGuideYAt(leftX, this.terrainTopByColumn),
+      this.smoothedTerrainGuideYAt(rightX, this.terrainTopByColumn),
+      t,
+    );
   }
 
   private creatureOriginY(assetKey: CreatureKey) {
@@ -4347,8 +4864,7 @@ export class OceanScene extends Phaser.Scene {
       camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
       camera.setZoom(1);
       camera.centerOn(this.hero.x, this.hero.y);
-      camera.startFollow(this.hero, true, 0.055, 0.055);
-      camera.setDeadzone(190, 118);
+      this.applyHeroCameraFollowSettings(true);
     }
 
     this.updateDeveloperToolState();
@@ -4394,6 +4910,7 @@ export class OceanScene extends Phaser.Scene {
     this.devCameraTools.renderHeightInput.value = String(window.getGameRenderHeight?.() ?? Number(this.devCameraTools.renderHeightInput.value));
     this.touchJoystickElements?.root.classList.toggle("dev-nav", this.devCameraEnabled);
     this.terrainGuideLayer?.setVisible(this.devCameraEnabled);
+    this.creatureTrackGuideLayer?.setVisible(this.devCameraEnabled);
     this.updateCaveVisibility();
   }
 
