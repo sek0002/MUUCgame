@@ -213,9 +213,9 @@ canvas {
   z-index: 24;
   display: none;
   place-items: center;
-  min-width: 44px;
+  width: 44px;
   height: 44px;
-  padding: 0 10px;
+  padding: 0;
   border: 1px solid rgba(155, 228, 219, 0.48);
   background: rgba(4, 20, 28, 0.78);
   color: #d8fff6;
@@ -226,6 +226,32 @@ canvas {
   text-shadow: 0 1px 0 #021017;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.fullscreen-icon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: block;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+}
+
+.fullscreen-icon::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 2px solid rgba(216, 255, 246, 0.54);
+}
+
+#fullscreen-toggle[aria-pressed="true"] .fullscreen-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#fullscreen-toggle[aria-pressed="true"] .fullscreen-icon::before {
+  inset: -6px;
+  border-color: rgba(216, 255, 246, 0.42);
 }
 
 #fullscreen-toggle:hover,
