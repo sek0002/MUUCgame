@@ -245,6 +245,7 @@ const CORAL_BACKGROUND_TILE_HEIGHT = 486;
 const SHOW_CORAL_BACKGROUND_REVIEW_ASSET = false;
 const SHOW_IMAGEGEN_PARALLAX_OVERLAY = false;
 const SHOW_DISTAL_WATER_COLUMN = false;
+const BACKGROUND_MODE_FADE_DURATION_MS = 3000;
 const FINAL_BIOME_BACKGROUND_DEPTH = -56.6;
 const FINAL_BIOME_BACKGROUND_ALPHA = 0.92;
 const FINAL_BIOME_BACKGROUND_FADE_START_X = BEACH_END_X - 240;
@@ -373,12 +374,13 @@ const KELP_FOREST_END_MARGIN = 420;
 const KELP_FOREST_ROW_COUNT = 4;
 const KELP_FOREST_BASE_SPACING = 86;
 const KELP_FOREST_SCALE_FACTOR = 0.71775;
-const KELP_FOREST_TERRAIN_LIFT = 76;
+const KELP_FOREST_TERRAIN_LIFT = 84;
 const KELP_FOREST_ANIMATION_VIEW_MARGIN = 900;
 const KELP_FOREST_MAX_ANIMATED_PER_FRAME = 144;
 const KELP_FOREST_BAKE_DENSITY_THRESHOLD = 0.42;
 const KELP_FOREST_BAKE_CHUNK_WIDTH = 1400;
 const KELP_FOREST_BAKE_PADDING = 260;
+const KELP_FOREST_SHELF_TAPER_FRACTION = 0.25;
 const KELP_FOREST_VARIANTS: KelpForestVariant[] = [
   { id: "01", key: "kelp-random-01-sway", animationKey: "kelp-random-01-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-01-sway-sheet.png", frameWidth: 459, frameHeight: 858 },
   { id: "02", key: "kelp-random-02-sway", animationKey: "kelp-random-02-sway-loop", url: "/assets/landscape/kelp-sprites/sway/kelp-random-02-sway-sheet.png", frameWidth: 512, frameHeight: 769 },
@@ -401,7 +403,6 @@ const TERRAIN_GRADIENT_TEXTURE_HEIGHT = 720;
 const MIN_LOADING_SCREEN_MS = 1400;
 const READY_LOADING_HOLD_MS = 700;
 type SeagrassFrameSet = (typeof SEAGRASS_MEADOW_VARIANTS)[number]["frames"];
-
 export class OceanScene extends Phaser.Scene {
   private hero!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -464,6 +465,8 @@ export class OceanScene extends Phaser.Scene {
   private devCameraTools?: DevCameraTools;
   private devCameraEnabled = false;
   private devCameraDragging = false;
+  private backgroundImageVisibility = 1;
+  private backgroundImageVisibilityTween?: Phaser.Tweens.Tween;
   private caveSeed = DEFAULT_CAVE_SEED;
   private caveTiles = new Set<string>();
   private loadingScreenStartedAt = 0;
@@ -1760,7 +1763,6 @@ export class OceanScene extends Phaser.Scene {
     this.terrainGuideLayer = guide;
 
     const topByColumn = this.buildTerrainTopByColumn(rocks);
-
     const columnStep = TILE * 2;
     const guideSpacing = TILE * 18;
     guide.lineStyle(1, 0xdcc15f, 0.42);
@@ -1779,7 +1781,11 @@ export class OceanScene extends Phaser.Scene {
     this.createTerrainBiomeLabels(zones, topByColumn);
   }
 
-  private strokeTerrainGuideLine(graphics: Phaser.GameObjects.Graphics, topByColumn: Map<number, number>, step: number) {
+  private strokeTerrainGuideLine(
+    graphics: Phaser.GameObjects.Graphics,
+    topByColumn: Map<number, number>,
+    step: number,
+  ) {
     const points: Array<{ x: number; y: number }> = [];
     for (let x = 0; x <= WORLD_WIDTH; x += step) {
       points.push({ x, y: this.smoothedTerrainGuideYAt(x, topByColumn) });
@@ -2746,7 +2752,7 @@ export class OceanScene extends Phaser.Scene {
 
     const startX = kelpZone.startX + KELP_FOREST_START_MARGIN;
     const shelfFadeEndX = shelfZone
-      ? shelfZone.startX + (shelfZone.endX - shelfZone.startX) * 0.5
+      ? shelfZone.startX + (shelfZone.endX - shelfZone.startX) * KELP_FOREST_SHELF_TAPER_FRACTION
       : kelpZone.endX - KELP_FOREST_END_MARGIN;
     const endX = Math.max(kelpZone.endX - KELP_FOREST_END_MARGIN, shelfFadeEndX);
     const peakX = (kelpZone.startX + kelpZone.endX) * 0.5;
@@ -2828,6 +2834,8 @@ export class OceanScene extends Phaser.Scene {
 
     this.createBakedKelpForest(bakeDescriptors);
   }
+
+  
 
   private createBakedKelpForest(descriptors: KelpBakeDescriptor[]) {
     if (descriptors.length === 0) return;
@@ -5066,12 +5074,14 @@ export class OceanScene extends Phaser.Scene {
       camera.stopFollow();
       camera.useBounds = false;
       camera.setDeadzone(0, 0);
+      this.setBackgroundImageVisibility(false);
     } else {
       camera.useBounds = true;
       camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
       camera.setZoom(1);
       camera.centerOn(this.hero.x, this.hero.y);
       this.applyHeroCameraFollowSettings(true);
+      this.setBackgroundImageVisibility(true);
     }
 
     this.updateDeveloperToolState();
@@ -5149,6 +5159,39 @@ export class OceanScene extends Phaser.Scene {
     this.updateHud();
     this.updateLighting();
     this.updateDeveloperToolReadout();
+  }
+
+  private setBackgroundImageVisibility(visible: boolean) {
+    this.backgroundImageVisibilityTween?.remove();
+    this.backgroundImageVisibilityTween = undefined;
+
+    if (visible) {
+      const visibilityState = { value: this.backgroundImageVisibility };
+      this.backgroundImageVisibilityTween = this.tweens.add({
+        targets: visibilityState,
+        value: 1,
+        duration: BACKGROUND_MODE_FADE_DURATION_MS,
+        ease: Phaser.Math.Easing.Sine.Out,
+        onUpdate: () => {
+          this.backgroundImageVisibility = visibilityState.value;
+          this.updateDistalWaterColumn();
+          this.updateCoralGardenBackdrop();
+          this.updateFinalBiomeBackgrounds();
+        },
+        onComplete: () => {
+          this.backgroundImageVisibility = 1;
+          this.backgroundImageVisibilityTween = undefined;
+          this.updateDistalWaterColumn();
+          this.updateCoralGardenBackdrop();
+          this.updateFinalBiomeBackgrounds();
+        },
+      });
+    } else {
+      this.backgroundImageVisibility = 0;
+      this.updateDistalWaterColumn();
+      this.updateCoralGardenBackdrop();
+      this.updateFinalBiomeBackgrounds();
+    }
   }
 
   private zoomDeveloperCamera(multiplier: number) {
@@ -5470,6 +5513,7 @@ export class OceanScene extends Phaser.Scene {
       .fillStyle(0xffffff, 1)
       .fillRect(0, waterlineInViewY, camera.width, underwaterHeight);
     this.distalWaterColumn
+      .setAlpha(DISTAL_WATER_COLUMN_ALPHA * this.backgroundImageVisibility)
       .setPosition(
         camera.width / 2 + this.distalWaterOffset.x,
         surfaceLinkedTop + displayHeight / 2 + this.distalWaterOffset.y,
@@ -5516,7 +5560,7 @@ export class OceanScene extends Phaser.Scene {
       CORAL_GARDEN_BACKDROP_RESPONSE,
     );
 
-    const targetAlpha = this.coralGardenBackdropTargetAlpha();
+    const targetAlpha = this.coralGardenBackdropTargetAlpha() * this.backgroundImageVisibility;
     this.coralGardenBackdrop.setAlpha(targetAlpha).setVisible(targetAlpha > 0);
     this.coralGardenBackdropMask
       ?.clear()
@@ -5590,7 +5634,7 @@ export class OceanScene extends Phaser.Scene {
         FINAL_BIOME_BACKGROUND_RESPONSE,
       );
       const inCave = this.hero ? this.isHeroInCave() : false;
-      const alpha = inCave ? 0 : this.finalBiomeBackgroundAlphaAt(camera.scrollX + camera.width / 2);
+      const alpha = (inCave ? 0 : this.finalBiomeBackgroundAlphaAt(camera.scrollX + camera.width / 2)) * this.backgroundImageVisibility;
       layer.image.setAlpha(alpha).setVisible(alpha > 0);
       layer.mask
         .clear()
