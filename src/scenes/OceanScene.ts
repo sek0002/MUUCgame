@@ -837,7 +837,7 @@ export class OceanScene extends Phaser.Scene {
   }
 
   private createBackground(zones: OceanZone[]) {
-    const skyBandHeight = 8;
+    const skyBandHeight = 2;
     for (let y = 0; y < WATERLINE_Y; y += skyBandHeight) {
       const t = this.smooth01(y / WATERLINE_Y);
       const color = t < 0.62

@@ -493,6 +493,7 @@ canvas {
   justify-items: center;
   gap: 10px;
   width: min(72vw, 360px);
+  max-height: calc(100dvh - 24px);
   color: #d8fff6;
   text-align: center;
   text-shadow: none;
@@ -548,7 +549,7 @@ canvas {
 }
 
 #loading-panel img {
-  width: min(46vw, 360px);
+  width: min(46vw, 56dvh, 360px);
   height: auto;
   image-rendering: pixelated;
   animation: loading-logo 1200ms ease-in-out infinite alternate;
@@ -556,7 +557,7 @@ canvas {
 }
 
 #loading-title {
-  margin-top: clamp(-150px, -16vw, -72px);
+  margin-top: clamp(-150px, -21dvh, -56px);
   font-size: 14px;
   line-height: 1;
   letter-spacing: 0;
