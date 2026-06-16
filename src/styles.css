@@ -230,28 +230,44 @@ canvas {
 
 .fullscreen-icon {
   position: relative;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
-  border: 2px solid currentColor;
-  box-sizing: border-box;
+  background:
+    linear-gradient(currentColor 0 0) left top / 8px 2px no-repeat,
+    linear-gradient(currentColor 0 0) left top / 2px 8px no-repeat,
+    linear-gradient(currentColor 0 0) right top / 8px 2px no-repeat,
+    linear-gradient(currentColor 0 0) right top / 2px 8px no-repeat,
+    linear-gradient(currentColor 0 0) left bottom / 8px 2px no-repeat,
+    linear-gradient(currentColor 0 0) left bottom / 2px 8px no-repeat,
+    linear-gradient(currentColor 0 0) right bottom / 8px 2px no-repeat,
+    linear-gradient(currentColor 0 0) right bottom / 2px 8px no-repeat;
 }
 
 .fullscreen-icon::before {
   content: "";
   position: absolute;
-  inset: 3px;
-  border: 2px solid rgba(216, 255, 246, 0.54);
+  inset: 6px;
+  border: 1px solid rgba(216, 255, 246, 0.34);
 }
 
 #fullscreen-toggle[aria-pressed="true"] .fullscreen-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  background-size:
+    7px 2px,
+    2px 7px,
+    7px 2px,
+    2px 7px,
+    7px 2px,
+    2px 7px,
+    7px 2px,
+    2px 7px;
 }
 
 #fullscreen-toggle[aria-pressed="true"] .fullscreen-icon::before {
-  inset: -6px;
-  border-color: rgba(216, 255, 246, 0.42);
+  inset: 4px;
+  border-color: rgba(216, 255, 246, 0.48);
 }
 
 #fullscreen-toggle:hover,

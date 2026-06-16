@@ -23,11 +23,19 @@ const fullscreenDocument = document as WebkitFullscreenDocument;
 const fullscreenElement = () =>
   document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement ?? null;
 
-const DEFAULT_RENDER_HEIGHT = 720;
+const DEFAULT_DESKTOP_RENDER_HEIGHT = 720;
+const DEFAULT_MOBILE_RENDER_HEIGHT = 480;
 const MIN_RENDER_HEIGHT = 360;
 const MAX_RENDER_HEIGHT = 1080;
 const MIN_RENDER_WIDTH = 360;
-let renderHeight = DEFAULT_RENDER_HEIGHT;
+
+const defaultRenderHeight = () => (
+  window.matchMedia("(hover: none), (pointer: coarse)").matches
+    ? DEFAULT_MOBILE_RENDER_HEIGHT
+    : DEFAULT_DESKTOP_RENDER_HEIGHT
+);
+
+let renderHeight = defaultRenderHeight();
 
 const getRenderSize = () => {
   const aspect = window.innerWidth / Math.max(1, window.innerHeight);
