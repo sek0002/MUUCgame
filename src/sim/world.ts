@@ -49,14 +49,18 @@ export interface Decoration {
 }
 
 export type CreatureKey =
+  | "banded-wrasse"
   | "blue-devil"
   | "bull-ray"
+  | "flathead"
   | "grass-whiting-peck"
   | "grass-whiting-peek"
   | "crayfish"
   | "killer-whale"
   | "king-george-whiting"
+  | "leatherjacket"
   | "nudhhi"
+  | "red-snapper"
   | "seadragon"
   | "dusky-morwong"
   | "smooth-sting-ray"
@@ -171,8 +175,12 @@ const SEAGRASS_CANOPY_HEIGHT = 526 * 0.82 * 0.25;
 const SEADRAGON_COUNT = 10;
 const SEADRAGON_MIN_DISTANCE_FROM_SEAGRASS_TOP = 44;
 const SEADRAGON_MAX_DISTANCE_FROM_SEAGRASS_TOP = 86;
-const SOLITARY_SEAGRASS_FISH_COUNT = 5;
+const SOLITARY_SEAGRASS_FISH_COUNT = 4;
 const KING_GEORGE_WHITING_COUNT = 10;
+const RED_SNAPPER_COUNT = 2;
+const BANDED_WRASSE_COUNT = 24;
+const LEATHERJACKET_PER_BIOME_COUNT = 5;
+const FLATHEAD_PER_BIOME_COUNT = 4;
 
 export const CAVE_ZONE: OceanZone = {
   id: "cave",
@@ -2994,6 +3002,10 @@ function generateCreatures(solid: boolean[][], random: () => number) {
   addSeagrassMeadowPeckFish(creatures, solid, random, usedCreatureTiles);
   addSeagrassMeadowSolitaryFish(creatures, solid, random, usedCreatureTiles);
   addKingGeorgeWhiting(creatures, solid, random, usedCreatureTiles);
+  addRedSnapper(creatures, solid, random, usedCreatureTiles);
+  addBandedWrasse(creatures, solid, random, usedCreatureTiles);
+  addLeatherjackets(creatures, solid, random, usedCreatureTiles);
+  addFlatheads(creatures, solid, random, usedCreatureTiles);
   addSeagrassMeadowSeadragons(creatures, solid, random, usedCreatureTiles);
   addBullRays(creatures, random);
   addHabitatCreatures(creatures, solid, random, usedCreatureTiles, "smooth-sting-ray", randomCount(random, 2, 5), coralAndOpenOceanBounds(), (tx, ty) => {
@@ -3052,7 +3064,6 @@ function addSeagrassMeadowPeekFish(
       return (
         !used.has(key) &&
         isSeagrassMeadowZone(zoneAtX(tx * TILE).id) &&
-        isAwayFromCreatures(usedCreatureTiles, tx, ty) &&
         isOpenWaterTile(solid, tx, ty) &&
         hasCreatureClearance(solid, tx, ty, 2, 1) &&
         ty === floor - 1
@@ -3061,7 +3072,6 @@ function addSeagrassMeadowPeekFish(
     if (!anchor) continue;
 
     const groupSize = randomCount(random, 2, 6);
-    const existingCreatureTiles = new Set(usedCreatureTiles);
     let members = 0;
     for (let attempt = 0; attempt < groupSize * 8 && members < groupSize; attempt += 1) {
       const tx = clamp(anchor.tx + Math.round(randomNormal(random, 0, 3.25)), groupBounds.startTx, groupBounds.endTx - 1);
@@ -3069,7 +3079,6 @@ function addSeagrassMeadowPeekFish(
       const ty = floor - 1;
       const key = tileKey(tx, ty);
       if (used.has(key) || !isSeagrassMeadowZone(zoneAtX(tx * TILE).id)) continue;
-      if (!isAwayFromCreatures(existingCreatureTiles, tx, ty)) continue;
       if (!isOpenWaterTile(solid, tx, ty) || !hasCreatureClearance(solid, tx, ty, 2, 1)) continue;
 
       used.add(key);
@@ -3106,7 +3115,6 @@ function addSeagrassMeadowSeadragons(
       return (
         !used.has(key) &&
         isSeagrassMeadowZone(zoneAtX(tx * TILE).id) &&
-        isAwayFromCreatures(usedCreatureTiles, tx, ty) &&
         isOpenWaterTile(solid, tx, ty) &&
         hasCreatureClearance(solid, tx, ty, 2, 1) &&
         ty >= floor - 5 &&
@@ -3187,6 +3195,206 @@ function addKingGeorgeWhiting(
   }
 }
 
+function addRedSnapper(
+  creatures: CreatureSpawn[],
+  solid: boolean[][],
+  random: () => number,
+  usedCreatureTiles: Set<string>,
+) {
+  const bounds = seagrassAndKelpMidwaterBounds();
+  const used = new Set<string>();
+
+  for (let index = 0; index < RED_SNAPPER_COUNT; index += 1) {
+    const spawn = findSpawnTile(solid, random, bounds, (tx, ty) => {
+      const key = tileKey(tx, ty);
+      const zoneId = zoneAtX(tx * TILE).id;
+      const floor = seafloorTileFor(tx);
+      return (
+        (zoneId === SEAGRASS_ZONE.id || zoneId === KELP_ZONE.id) &&
+        !used.has(key) &&
+        isOpenWaterTile(solid, tx, ty) &&
+        hasCreatureClearance(solid, tx, ty, 4, 2) &&
+        ty >= WATERLINE_TILE + 6 &&
+        ty <= floor - 8
+      );
+    });
+    if (!spawn) continue;
+
+    const key = tileKey(spawn.tx, spawn.ty);
+    used.add(key);
+    usedCreatureTiles.add(key);
+
+    const fish = makeCreatureSpawn(spawn.tx, spawn.ty, zoneAtX(spawn.tx * TILE), "red-snapper", random);
+    fish.x = spawn.tx * TILE + 16 + randomNormal(random, 0, 28);
+    fish.y = clamp(
+      WATERLINE_Y + 230 + random() * 190,
+      WATERLINE_Y + 155,
+      seafloorTileFor(Math.floor(fish.x / TILE)) * TILE - 190,
+    );
+    fish.directionX = random() > 0.5 ? 1 : -1;
+    fish.scale *= 0.75 + random() * 0.75;
+    creatures.push(fish);
+  }
+}
+
+function addBandedWrasse(
+  creatures: CreatureSpawn[],
+  solid: boolean[][],
+  random: () => number,
+  usedCreatureTiles: Set<string>,
+) {
+  const bounds = seagrassAndKelpMidwaterBounds();
+  const used = new Set<string>();
+  const span = (bounds.endTx - bounds.startTx) / BANDED_WRASSE_COUNT;
+
+  for (let index = 0; index < BANDED_WRASSE_COUNT; index += 1) {
+    const startTx = Math.floor(bounds.startTx + span * index + span * 0.16);
+    const endTx = Math.floor(bounds.startTx + span * (index + 1) - span * 0.16);
+    const sectionBounds = {
+      ...bounds,
+      startTx: clamp(startTx, bounds.startTx, bounds.endTx - 1),
+      endTx: clamp(endTx, bounds.startTx + 1, bounds.endTx),
+    };
+    const spawn = findSpawnTile(solid, random, sectionBounds, (tx, ty) => {
+      const key = tileKey(tx, ty);
+      const zoneId = zoneAtX(tx * TILE).id;
+      const floor = seafloorTileFor(tx);
+      return (
+        (zoneId === SEAGRASS_ZONE.id || zoneId === KELP_ZONE.id) &&
+        !used.has(key) &&
+        isOpenWaterTile(solid, tx, ty) &&
+        hasCreatureClearance(solid, tx, ty, 3, 2) &&
+        ty >= floor - 10 &&
+        ty <= floor - 2
+      );
+    });
+    if (!spawn) continue;
+
+    const key = tileKey(spawn.tx, spawn.ty);
+    used.add(key);
+    usedCreatureTiles.add(key);
+
+    const fish = makeCreatureSpawn(spawn.tx, spawn.ty, zoneAtX(spawn.tx * TILE), "banded-wrasse", random);
+    const floorY = seafloorTileFor(spawn.tx) * TILE;
+    fish.x = spawn.tx * TILE + 16 + randomNormal(random, 0, 22);
+    fish.y = clamp(
+      random() < 0.58
+        ? floorY - (74 + random() * 82)
+        : floorY - (148 + random() * 132),
+      WATERLINE_Y + 128,
+      floorY - 66,
+    );
+    fish.directionX = random() > 0.5 ? 1 : -1;
+    fish.scale *= 0.5 + random() * 0.75;
+    creatures.push(fish);
+  }
+}
+
+function addLeatherjackets(
+  creatures: CreatureSpawn[],
+  solid: boolean[][],
+  random: () => number,
+  usedCreatureTiles: Set<string>,
+) {
+  const used = new Set<string>();
+
+  for (const zone of [SEAGRASS_ZONE, KELP_ZONE]) {
+    const bounds = shallowGardenZoneMidwaterBounds(zone);
+    const span = (bounds.endTx - bounds.startTx) / LEATHERJACKET_PER_BIOME_COUNT;
+
+    for (let index = 0; index < LEATHERJACKET_PER_BIOME_COUNT; index += 1) {
+      const startTx = Math.floor(bounds.startTx + span * index + span * 0.12);
+      const endTx = Math.floor(bounds.startTx + span * (index + 1) - span * 0.12);
+      const sectionBounds = {
+        ...bounds,
+        startTx: clamp(startTx, bounds.startTx, bounds.endTx - 1),
+        endTx: clamp(endTx, bounds.startTx + 1, bounds.endTx),
+      };
+      const spawn = findSpawnTile(solid, random, sectionBounds, (tx, ty) => {
+        const key = tileKey(tx, ty);
+        const floor = seafloorTileFor(tx);
+        const zoneId = zoneAtX(tx * TILE).id;
+        const midColumnMaxTy = Math.floor((WATERLINE_TILE + floor) * 0.68);
+        return (
+          zoneId === zone.id &&
+          !used.has(key) &&
+          !usedCreatureTiles.has(key) &&
+          isOpenWaterTile(solid, tx, ty) &&
+          hasCreatureClearance(solid, tx, ty, 4, 2) &&
+          ty >= WATERLINE_TILE + 6 &&
+          ty <= Math.min(floor - 7, midColumnMaxTy)
+        );
+      });
+      if (!spawn) continue;
+
+      const key = tileKey(spawn.tx, spawn.ty);
+      used.add(key);
+      usedCreatureTiles.add(key);
+
+      const fish = makeCreatureSpawn(spawn.tx, spawn.ty, zoneAtX(spawn.tx * TILE), "leatherjacket", random);
+      const floorY = seafloorTileFor(spawn.tx) * TILE;
+      const canopyY = zone.id === SEAGRASS_ZONE.id ? seagrassCanopyTopYAt(fish.x) : WATERLINE_Y + 360;
+      fish.x = spawn.tx * TILE + 16 + randomNormal(random, 0, 20);
+      fish.y = clamp(
+        zone.id === SEAGRASS_ZONE.id
+          ? canopyY - 24 + random() * 120
+          : WATERLINE_Y + 210 + random() * 240,
+        WATERLINE_Y + 145,
+        floorY - 150,
+      );
+      fish.directionX = random() > 0.5 ? 1 : -1;
+      fish.scale *= clamp(0.86 + randomNormal(random, 0, 0.1), 0.7, 1.08);
+      creatures.push(fish);
+    }
+  }
+}
+
+function addFlatheads(
+  creatures: CreatureSpawn[],
+  solid: boolean[][],
+  random: () => number,
+  usedCreatureTiles: Set<string>,
+) {
+  const used = new Set<string>();
+
+  for (const zone of [SEAGRASS_ZONE, KELP_ZONE]) {
+    const bounds = shallowGardenFloorBounds(zone);
+    const span = (bounds.endTx - bounds.startTx) / FLATHEAD_PER_BIOME_COUNT;
+
+    for (let index = 0; index < FLATHEAD_PER_BIOME_COUNT; index += 1) {
+      const startTx = Math.floor(bounds.startTx + span * index + span * 0.14);
+      const endTx = Math.floor(bounds.startTx + span * (index + 1) - span * 0.14);
+      const sectionBounds = {
+        ...bounds,
+        startTx: clamp(startTx, bounds.startTx, bounds.endTx - 1),
+        endTx: clamp(endTx, bounds.startTx + 1, bounds.endTx),
+      };
+      const spawn = findSpawnTile(solid, random, sectionBounds, (tx, ty) => {
+        const key = tileKey(tx, ty);
+        return (
+          zoneAtX(tx * TILE).id === zone.id &&
+          !used.has(key) &&
+          !usedCreatureTiles.has(key) &&
+          isSupportedFloorTile(solid, tx, ty) &&
+          hasCreatureClearance(solid, tx, ty - 1, 4, 1)
+        );
+      });
+      if (!spawn) continue;
+
+      const key = tileKey(spawn.tx, spawn.ty);
+      used.add(key);
+      usedCreatureTiles.add(key);
+
+      const fish = makeCreatureSpawn(spawn.tx, spawn.ty, zoneAtX(spawn.tx * TILE), "flathead", random);
+      fish.x = spawn.tx * TILE + 16 + randomNormal(random, 0, 20);
+      fish.y = seafloorTileFor(spawn.tx) * TILE;
+      fish.directionX = random() > 0.5 ? 1 : -1;
+      fish.scale = 0.5 + random() * 0.25;
+      creatures.push(fish);
+    }
+  }
+}
+
 function shuffledSeadragonFacingDirections(random: () => number): Array<-1 | 1> {
   const directions = Array.from({ length: SEADRAGON_COUNT }, (_, index): -1 | 1 => {
     return index < Math.ceil(SEADRAGON_COUNT / 2) ? -1 : 1;
@@ -3232,7 +3440,6 @@ function addSeagrassMeadowPeckFish(
       return (
         !used.has(key) &&
         isSeagrassMeadowZone(zoneAtX(tx * TILE).id) &&
-        isAwayFromCreatures(usedCreatureTiles, tx, ty) &&
         isOpenWaterTile(solid, tx, ty) &&
         hasCreatureClearance(solid, tx, ty, 2, 1) &&
         ty >= floor - 5 &&
@@ -3242,7 +3449,6 @@ function addSeagrassMeadowPeckFish(
     if (!anchor) continue;
 
     const groupSize = randomCount(random, 2, 6);
-    const existingCreatureTiles = new Set(usedCreatureTiles);
     let members = 0;
     for (let attempt = 0; attempt < groupSize * 14 && members < groupSize; attempt += 1) {
       const tx = clamp(anchor.tx + Math.round(randomNormal(random, 0, 10.5)), groupBounds.startTx, groupBounds.endTx - 1);
@@ -3250,7 +3456,6 @@ function addSeagrassMeadowPeckFish(
       const ty = clamp(floor - randomCount(random, 3, 5), bounds.minTy, bounds.maxTy - 1);
       const key = tileKey(tx, ty);
       if (used.has(key) || !isSeagrassMeadowZone(zoneAtX(tx * TILE).id)) continue;
-      if (!isAwayFromCreatures(existingCreatureTiles, tx, ty)) continue;
       if (!isOpenWaterTile(solid, tx, ty) || !hasCreatureClearance(solid, tx, ty, 2, 1)) continue;
 
       used.add(key);
@@ -3335,7 +3540,6 @@ function addYellowBlueFishSchools(
       const zoneId = zoneAtX(tx * TILE).id;
       return (
         isShallowGardenZone(zoneId) &&
-        isAwayFromCreatures(usedCreatureTiles, tx, ty) &&
         isOpenWaterTile(solid, tx, ty) &&
         hasCreatureClearance(solid, tx, ty, 4, 2)
       );
@@ -3394,7 +3598,7 @@ function addHabitatCreatures(
   const used = new Set<string>();
   for (let i = 0; i < count; i += 1) {
     const spawn = findSpawnTile(solid, random, bounds, (tx, ty) => {
-      return !used.has(tileKey(tx, ty)) && isAwayFromCreatures(usedCreatureTiles, tx, ty) && predicate(tx, ty);
+      return !used.has(tileKey(tx, ty)) && predicate(tx, ty);
     });
     if (!spawn) continue;
     used.add(tileKey(spawn.tx, spawn.ty));
@@ -3413,14 +3617,6 @@ function isShallowGardenZone(zoneId: OceanZoneId) {
 
 function isSeagrassMeadowZone(zoneId: OceanZoneId) {
   return zoneId === SEAGRASS_ZONE.id;
-}
-
-function isAwayFromCreatures(usedCreatureTiles: Set<string>, tx: number, ty: number) {
-  for (const key of usedCreatureTiles) {
-    const [otherTx, otherTy] = key.split(",").map(Number);
-    if (Math.hypot(otherTx - tx, otherTy - ty) < 18) return false;
-  }
-  return true;
 }
 
 function beachAreaBounds() {
@@ -3474,6 +3670,33 @@ function seagrassMeadowBounds() {
     endTx: Math.floor((SEAGRASS_ZONE.endX - 220) / TILE),
     minTy: WATERLINE_TILE + 3,
     maxTy: Math.floor(depthToY(SEAGRASS_ZONE.maxDepth + 10) / TILE),
+  };
+}
+
+function seagrassAndKelpMidwaterBounds() {
+  return {
+    startTx: Math.floor((SEAGRASS_ZONE.startX + 520) / TILE),
+    endTx: Math.floor((KELP_ZONE.endX - 520) / TILE),
+    minTy: WATERLINE_TILE + 5,
+    maxTy: Math.floor(depthToY(SEAGRASS_ZONE.maxDepth + 2) / TILE),
+  };
+}
+
+function shallowGardenZoneMidwaterBounds(zone: OceanZone) {
+  return {
+    startTx: Math.floor((zone.startX + 360) / TILE),
+    endTx: Math.floor((zone.endX - 300) / TILE),
+    minTy: WATERLINE_TILE + 5,
+    maxTy: Math.floor(depthToY(zone.maxDepth + 2) / TILE),
+  };
+}
+
+function shallowGardenFloorBounds(zone: OceanZone) {
+  return {
+    startTx: Math.floor((zone.startX + 420) / TILE),
+    endTx: Math.floor((zone.endX - 340) / TILE),
+    minTy: WATERLINE_TILE + 4,
+    maxTy: Math.floor(depthToY(zone.maxDepth + 4) / TILE),
   };
 }
 
@@ -3547,30 +3770,38 @@ function makeCreatureSpawn(
 }
 
 function creatureDrift(assetKey: CreatureKey, random: () => number) {
+  if (assetKey === "banded-wrasse") return 70 + random() * 80;
   if (assetKey === "bull-ray") return 1900 + random() * 2800;
+  if (assetKey === "flathead") return 520 + random() * 360;
+  if (assetKey === "leatherjacket") return 48 + random() * 62;
   if (assetKey === "yellow-blue-fish") return 260 + random() * 420;
   if (assetKey === "king-george-whiting") return 72 + random() * 92;
   if (assetKey === "seadragon") return 100 + random() * 80;
   if (assetKey === "dusky-morwong") return 900 + random() * 900;
+  if (assetKey === "red-snapper") return 1600 + random() * 1900;
   return 12 + random() * 34;
 }
 
 function creatureScale(assetKey: CreatureKey, random: () => number) {
   const means: Record<CreatureKey, number> = {
+    "banded-wrasse": 1,
     "blue-devil": 0.48,
     "bull-ray": 1,
+    flathead: 1,
     "grass-whiting-peck": 1,
     "grass-whiting-peek": 1,
     crayfish: 0.62,
     "killer-whale": 1.08,
     "king-george-whiting": 1,
+    leatherjacket: 1,
     nudhhi: 0.34,
+    "red-snapper": 1,
     seadragon: 0.44,
     "dusky-morwong": 1,
     "smooth-sting-ray": 0.68,
     "yellow-blue-fish": 1,
   };
-  const spread = assetKey === "bull-ray" || assetKey === "killer-whale" || assetKey === "yellow-blue-fish" || assetKey === "king-george-whiting" || assetKey === "grass-whiting-peek" || assetKey === "grass-whiting-peck" || assetKey === "dusky-morwong" ? 0.08 : 0.16;
+  const spread = assetKey === "bull-ray" || assetKey === "killer-whale" || assetKey === "yellow-blue-fish" || assetKey === "king-george-whiting" || assetKey === "grass-whiting-peek" || assetKey === "grass-whiting-peck" || assetKey === "dusky-morwong" || assetKey === "red-snapper" || assetKey === "banded-wrasse" || assetKey === "leatherjacket" || assetKey === "flathead" ? 0.08 : 0.16;
   return Math.max(0.18, means[assetKey] * (1 + randomNormal(random, 0, spread)));
 }
 

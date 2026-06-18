@@ -79,11 +79,53 @@ export const CREATURES = {
     frameWidth: 701,
     frameHeight: 748,
   },
+  redSnapper: {
+    key: "red-snapper",
+    url: assetUrl("/assets/creatures/red-snapper-tail-perspective-sheet-alpha.png"),
+    frameWidth: 724,
+    frameHeight: 724,
+  },
+  bandedWrasse: {
+    key: "banded-wrasse",
+    url: assetUrl("/assets/creatures/banded-wrasse/tail-perspective-strip.png"),
+    frameWidth: 724,
+    frameHeight: 724,
+  },
+  leatherjacket: {
+    key: "leatherjacket",
+    url: assetUrl("/assets/creatures/leatherjacket/leatherjacket-swim-spike-down-loop-sheet.png"),
+    sheets: {
+      spikeDown: {
+        key: "leatherjacket-swim-spike-down",
+        url: assetUrl("/assets/creatures/leatherjacket/leatherjacket-swim-spike-down-loop-sheet.png"),
+      },
+      spikeUp: {
+        key: "leatherjacket-swim-spike-up",
+        url: assetUrl("/assets/creatures/leatherjacket/leatherjacket-swim-spike-up-loop-sheet.png"),
+      },
+      upToDown: {
+        key: "leatherjacket-swim-spike-up-to-down",
+        url: assetUrl("/assets/creatures/leatherjacket/leatherjacket-swim-spike-up-to-down-transition-sheet.png"),
+      },
+      downToUp: {
+        key: "leatherjacket-swim-spike-down-to-up",
+        url: assetUrl("/assets/creatures/leatherjacket/leatherjacket-swim-spike-down-to-up-transition-sheet.png"),
+      },
+    },
+    frameWidth: 512,
+    frameHeight: 256,
+  },
   bullRay: {
     key: "bull-ray",
     url: assetUrl("/assets/creatures/bull-ray-imagegen-side-sheet.png"),
     frameWidth: 288,
     frameHeight: 112,
+  },
+  flathead: {
+    key: "flathead",
+    url: assetUrl("/assets/creatures/flathead-fin-wave-sheet.png"),
+    frameWidth: 1704,
+    frameHeight: 431,
   },
 } as const;
 
@@ -95,7 +137,11 @@ export const NPC_CREATURES = [
   CREATURES.nudhhi,
   CREATURES.seadragon,
   CREATURES.duskyMorwong,
+  CREATURES.redSnapper,
+  CREATURES.bandedWrasse,
+  CREATURES.leatherjacket,
   CREATURES.bullRay,
+  CREATURES.flathead,
   CREATURES.stingray,
   CREATURES.yellowBlueFish,
 ] as const;
