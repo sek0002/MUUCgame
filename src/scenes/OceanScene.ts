@@ -575,8 +575,8 @@ export class OceanScene extends Phaser.Scene {
 
   preload() {
     this.updateLoadingScreen(0);
-    this.load.on("progress", (value: number) => this.updateLoadingScreen(value));
-    this.load.once("complete", () => this.updateLoadingScreen(1));
+    this.load.on("progress", (value: number) => this.updateLoadingScreen(value * 0.9));
+    this.load.once("complete", () => this.updateLoadingScreen(0.9, "Preparing world"));
 
     this.load.image(CREATURES.hero.frames.center.key, CREATURES.hero.frames.center.url);
     this.load.image(CREATURES.hero.frames.tailRight.key, CREATURES.hero.frames.tailRight.url);
@@ -678,53 +678,111 @@ export class OceanScene extends Phaser.Scene {
   create() {
     this.autoStartAfterLoad = new URLSearchParams(window.location.search).has("noStartupSlide");
     document.getElementById("app")?.classList.remove("splash-scene-ready");
-    const world = generateWorld(this.caveSeed);
-    this.caveTiles = world.caveTiles;
-    this.zoneLabel = document.getElementById("zone-label");
-    this.depthLabel = document.getElementById("depth-label");
-    this.depthGaugeFill = document.getElementById("depth-gauge-fill");
-    this.depthGaugeMax = document.getElementById("depth-gauge-max");
-    this.depthMarker = document.getElementById("depth-marker");
-
-    this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.setRoundPixels(false);
-
-    this.createBackground(world.zones);
-    if (SHOW_DISTAL_WATER_COLUMN) {
-      this.createDistalWaterColumn(world.zones);
-      this.createCoralGardenBackdrop(world.zones);
-    }
-    this.createFinalBiomeBackgrounds();
-    if (SHOW_CORAL_BACKGROUND_REVIEW_ASSET) {
-      this.createCoralBackground(world.zones);
-    }
-    if (SHOW_IMAGEGEN_PARALLAX_OVERLAY) {
-      this.createImagegenParallaxOverlay(world.zones);
-    }
-    this.createBeach();
-    this.createWaterSurface();
-    this.createRocks(world.rocks, world.caveTiles);
-    this.createTerrainGuideOverlay(world.rocks, world.zones);
-    this.createBubbleField();
-    this.prepareSeagrassTextures();
-    this.createSeagrassMeadows(world.zones);
-    this.createKelpForest(world.zones);
-    this.createDecorations(world.decorations);
-    this.createCreatureAnimations();
-    this.createCreatures(world.creatures);
-    this.createDeepShipwreck();
-    this.createHero();
-    this.createControls();
-    this.createDeveloperTools();
-    this.createLightingOverlay();
-
-    this.physics.add.collider(this.hero, this.rocks);
-    this.splashOverlayActive = true;
-    this.prepareSplashScreen(world.zones, world.creatures);
+    this.runWorldPrepStages();
   }
 
-  private updateLoadingScreen(progress: number) {
+  private runWorldPrepStages() {
+    let world!: ReturnType<typeof generateWorld>;
+    const stages: Array<{ progress: number; status: string; run: () => void }> = [
+      {
+        progress: 0.91,
+        status: "Generating world",
+        run: () => {
+          world = generateWorld(this.caveSeed);
+          this.caveTiles = world.caveTiles;
+          this.zoneLabel = document.getElementById("zone-label");
+          this.depthLabel = document.getElementById("depth-label");
+          this.depthGaugeFill = document.getElementById("depth-gauge-fill");
+          this.depthGaugeMax = document.getElementById("depth-gauge-max");
+          this.depthMarker = document.getElementById("depth-marker");
+
+          this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+          this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+          this.cameras.main.setRoundPixels(false);
+        },
+      },
+      {
+        progress: 0.93,
+        status: "Painting ocean",
+        run: () => {
+          this.createBackground(world.zones);
+          if (SHOW_DISTAL_WATER_COLUMN) {
+            this.createDistalWaterColumn(world.zones);
+            this.createCoralGardenBackdrop(world.zones);
+          }
+          this.createFinalBiomeBackgrounds();
+          if (SHOW_CORAL_BACKGROUND_REVIEW_ASSET) {
+            this.createCoralBackground(world.zones);
+          }
+          if (SHOW_IMAGEGEN_PARALLAX_OVERLAY) {
+            this.createImagegenParallaxOverlay(world.zones);
+          }
+        },
+      },
+      {
+        progress: 0.95,
+        status: "Building terrain",
+        run: () => {
+          this.createBeach();
+          this.createWaterSurface();
+          this.createRocks(world.rocks, world.caveTiles);
+          this.createTerrainGuideOverlay(world.rocks, world.zones);
+          this.createBubbleField();
+        },
+      },
+      {
+        progress: 0.97,
+        status: "Growing seagrass and kelp",
+        run: () => {
+          this.prepareSeagrassTextures();
+          this.createSeagrassMeadows(world.zones);
+          this.createKelpForest(world.zones);
+          this.createDecorations(world.decorations);
+        },
+      },
+      {
+        progress: 0.985,
+        status: "Placing creatures",
+        run: () => {
+          this.createCreatureAnimations();
+          this.createCreatures(world.creatures);
+          this.createDeepShipwreck();
+        },
+      },
+      {
+        progress: 0.995,
+        status: "Preparing controls",
+        run: () => {
+          this.createHero();
+          this.createControls();
+          this.createDeveloperTools();
+          this.createLightingOverlay();
+
+          this.physics.add.collider(this.hero, this.rocks);
+          this.splashOverlayActive = true;
+          this.prepareSplashScreen(world.zones, world.creatures);
+        },
+      },
+    ];
+
+    const runStage = (index: number) => {
+      const stage = stages[index];
+      if (!stage) {
+        this.deferPlayableLoadingState();
+        return;
+      }
+
+      this.updateLoadingScreen(stage.progress, stage.status);
+      requestAnimationFrame(() => {
+        stage.run();
+        runStage(index + 1);
+      });
+    };
+
+    runStage(0);
+  }
+
+  private updateLoadingScreen(progress: number, statusText?: string) {
     const splash = document.getElementById("splash");
     const splashPanel = document.getElementById("loading-panel");
     const startButton = document.getElementById("start-button");
@@ -739,6 +797,9 @@ export class OceanScene extends Phaser.Scene {
       startButton.disabled = !isReady;
       this.startButton = startButton;
     }
+    if (splashPanel instanceof HTMLElement) {
+      splashPanel.classList.toggle("loading-ready", isReady);
+    }
     if (fill instanceof HTMLElement) {
       fill.style.width = `${Math.round(normalizedProgress * 100)}%`;
     }
@@ -746,20 +807,13 @@ export class OceanScene extends Phaser.Scene {
       percent.textContent = `${Math.round(normalizedProgress * 100)}%`;
     }
     if (status) {
-      status.textContent = normalizedProgress >= 1 ? "Press Start to dive" : "Loading assets";
+      status.textContent = statusText ?? (normalizedProgress >= 1 ? "Press Start to dive" : "Loading assets");
     }
 
     if (normalizedProgress >= 1) {
       this.loadingReady = true;
-      splashPanel?.classList.add("loading-ready");
       if (this.startButton instanceof HTMLButtonElement) {
         this.startButton.disabled = false;
-      }
-      if (splashPanel) {
-        splashPanel.classList.add("loading-ready");
-      }
-      if (this.autoStartAfterLoad) {
-        requestAnimationFrame(() => this.startGame());
       }
     }
   }
@@ -773,16 +827,12 @@ export class OceanScene extends Phaser.Scene {
       zoneId: OceanZone["id"];
     }>,
   ) {
-    this.updateLoadingScreen(1);
     this.splashRoot = document.getElementById("splash") ?? undefined;
     this.splashPanel = document.getElementById("loading-panel") ?? undefined;
     this.startButton = document.getElementById("start-button") instanceof HTMLButtonElement
       ? (document.getElementById("start-button") as HTMLButtonElement)
       : undefined;
 
-    if (this.splashPanel instanceof HTMLElement) {
-      this.splashPanel.classList.add("loading-ready");
-    }
     if (this.startButton instanceof HTMLButtonElement) {
       this.startButton.disabled = !this.loadingReady;
       if (this.startButton.dataset.bound !== "true") {
@@ -803,12 +853,32 @@ export class OceanScene extends Phaser.Scene {
     const splashRoot = this.splashRoot;
     const app = document.getElementById("app");
     if (app instanceof HTMLElement) {
-      app.classList.add("splash-mode", "splash-scene-ready");
+      app.classList.add("splash-mode");
+      app.classList.remove("splash-scene-ready");
     }
     splashRoot?.classList.remove("is-ready");
     splashRoot?.setAttribute("aria-hidden", "false");
     this.clearTouchInput();
+  }
+
+  private deferPlayableLoadingState() {
+    this.updateLoadingScreen(0.98, "Rendering scene");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.markLoadingPlayable());
+    });
+  }
+
+  private markLoadingPlayable() {
+    if (this.loadingReady) return;
+    const app = document.getElementById("app");
+    if (app instanceof HTMLElement) {
+      app.classList.add("splash-scene-ready");
+    }
+    this.updateLoadingScreen(1, "Press Start to dive");
     this.startButton?.focus();
+    if (this.autoStartAfterLoad) {
+      requestAnimationFrame(() => this.startGame());
+    }
   }
 
   private enterSplashCameraMode(
